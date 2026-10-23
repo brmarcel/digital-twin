@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Blumentopf 3D</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #1e232b; }
+    #hinweis { position: absolute; top: 12px; left: 12px; color: #ccc; font-family: sans-serif; }
+  </style>
+</head>
+<body>
+  <div id="hinweis">Maus ziehen = drehen, Mausrad = zoomen</div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+    import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+
+    // Szene, Kamera, Renderer
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x1e232b);
+
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(4, 3, 5);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // Licht
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const sonne = new THREE.DirectionalLight(0xffffff, 1.2);
+    sonne.position.set(5, 8, 4);
+    scene.add(sonne);
+
+    // ---- Einstellungen für den Topf ----
+    const seite = 2;          // Kantenlänge außen
+    const hoehe = 2;          // Höhe
+    const wand = 0.15;        // Wandstärke (muss größer als 2 * rundung sein!)
+    const bodenDicke = 0.3;   // Dicke des Topfbodens
+    const rundung = 0.05;     // Rundung der oberen/unteren Kanten
+    const ecke = 0.15;        // Rundung der senkrechten Ecken
+    const erdeAbstand = 0.2;  // wie tief die Erde unter dem Rand liegt
+
+    // Quadrat mit runden Ecken als 2D-Form
+    function rundesQuadrat(groesse, radius) {
+      const h = groesse / 2;
+      const s = new THREE.Shape();
+      s.moveTo(-h + radius, -h);
+      s.lineTo(h - radius, -h);
+      s.absarc(h - radius, -h + radius, radius, -Math.PI / 2, 0, false);
+      s.lineTo(h, h - radius);
+      s.absarc(h - radius, h - radius, radius, 0, Math.PI / 2, false);
+      s.lineTo(-h + radius, h);
+      s.absarc(-h + radius, h - radius, radius, Math.PI / 2, Math.PI, false);
+      s.lineTo(-h, -h + radius);
+      s.absarc(-h + radius, -h + radius, radius, Math.PI, 1.5 * Math.PI, false);
+      return s;
+    }
+
+    // 2D-Form nach oben ziehen (mit abgerundeten Ober-/Unterkanten),
+    // dann Flächen glätten
+    function ziehen(form, laenge) {
+      const g = new THREE.ExtrudeGeometry(form, {
+        depth: laenge - 2 * rundung,
+        bevelEnabled: true,
+        bevelThickness: rundung,
+        bevelSize: rundung,
+        bevelSegments: 6,
+        curveSegments: 16
+      });
+      g.rotateX(-Math.PI / 2);                 // z-Achse wird zur Höhe
+      g.translate(0, -hoehe / 2 + rundung, 0); // Unterkante auf -hoehe/2
+      g.deleteAttribute('normal');
+      g.deleteAttribute('uv');
+      const glatt = mergeVertices(g);
+      glatt.computeVertexNormals();
+      return glatt;
+    }
+
+    const weiss = new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 0.6 });
+
+    // Topfwand: Ring mit Loch (Bevel verkleinert das Loch, daher + 2*rundung)
+    const wandForm = rundesQuadrat(seite - 2 * rundung, ecke);
+    wandForm.holes.push(rundesQuadrat(seite - 2 * wand + 2 * rundung, ecke));
+    scene.add(new THREE.Mesh(ziehen(wandForm, hoehe), weiss));
+
+    // Topfboden (geschlossene Platte, unten abgerundet)
+    scene.add(new THREE.Mesh(
+      ziehen(rundesQuadrat(seite - 2 * rundung, ecke), bodenDicke), weiss
+    ));
+
+    // Erde: abgerundeter Block, unterhalb des Randes
+    const innen = seite - 2 * wand - 0.02;
+    const erdeOben = hoehe / 2 - erdeAbstand;
+    const erdeUnten = -hoehe / 2 + bodenDicke - 0.05;
+    const erde = new THREE.Mesh(
+      new RoundedBoxGeometry(innen, erdeOben - erdeUnten, innen, 4, 0.08),
+      new THREE.MeshStandardMaterial({ color: 0x3b2a1a, roughness: 1 })
+    );
+    erde.position.y = (erdeOben + erdeUnten) / 2;
+    scene.add(erde);
+
+    // Boden-Gitter zur Orientierung
+    const gitter = new THREE.GridHelper(10, 20, 0x555555, 0x333333);
+    gitter.position.y = -hoehe / 2 - 0.03;
+    scene.add(gitter);
+
+    // Maussteuerung
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.target.set(0, 0, 0);
+
+    // Fenstergröße anpassen
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Render-Schleife
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+  </script>
+</body>
+</html>
