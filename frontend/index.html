@@ -2,20 +2,47 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <title>Blumentopf 3D</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Blumentopf – Digitaler Zwilling</title>
   <style>
-    html, body { margin: 0; height: 100%; overflow: hidden; background: #1e232b; }
-    #hinweis { position: absolute; top: 12px; left: 12px; color: #ccc; font-family: sans-serif; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #1e232b; font-family: system-ui, sans-serif; color: #eee; }
+    #info { position: absolute; top: 16px; left: 16px; z-index: 2; background: rgba(17,21,27,.85); padding: 16px; border-radius: 12px; width: min(290px, calc(100vw - 64px)); }
+    h1 { font-size: 18px; margin: 0 0 12px; }
+    #moisture { font-size: 30px; font-weight: 700; margin: 8px 0; }
+    #status { font-size: 13px; color: #f3bd71; margin-bottom: 10px; }
+    #hint { font-size: 12px; color: #aaa; margin-top: 10px; }
+    label { display: block; font-size: 12px; margin: 9px 0 3px; }
+    input { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #4c5562; border-radius: 5px; background: #282f3a; color: white; }
+    button { margin-top: 10px; background: #64c99b; border: 0; border-radius: 6px; padding: 9px 12px; cursor: pointer; font-weight: 600; }
+    #disconnect { background: #b9c2cf; }
+    #login[hidden], #disconnect[hidden] { display: none; }
   </style>
 </head>
 <body>
-  <div id="hinweis">Maus ziehen = drehen, Mausrad = zoomen</div>
+  <section id="info">
+    <h1>Digitaler Blumentopf</h1>
+    <div>Bodenfeuchtigkeit</div>
+    <div id="moisture">– %</div>
+    <div id="status" role="status">Nicht verbunden</div>
+    <form id="login">
+      <label for="host">EMQX-Host (ohne https://)</label>
+      <input id="host" placeholder="dein-cluster.emqxsl.com" required>
+      <label for="username">MQTT-Benutzer (nur Leserechte)</label>
+      <input id="username" autocomplete="username" required>
+      <label for="password">MQTT-Passwort</label>
+      <input id="password" type="password" autocomplete="off" required>
+      <button type="submit">Verbinden</button>
+    </form>
+    <button id="disconnect" hidden>Trennen</button>
+    <div id="hint">Maus ziehen = drehen · Mausrad = zoomen</div>
+  </section>
 
   <script type="importmap">
     {
       "imports": {
         "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+        "mqtt": "https://esm.sh/mqtt@5.10.1?bundle"
       }
     }
   </script>
@@ -25,6 +52,7 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
     import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+    import mqtt from 'mqtt';
 
     // Szene, Kamera, Renderer
     const scene = new THREE.Scene();
@@ -35,6 +63,7 @@
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     document.body.appendChild(renderer.domElement);
 
     // Licht
@@ -44,15 +73,14 @@
     scene.add(sonne);
 
     // ---- Einstellungen für den Topf ----
-    const seite = 2;          // Kantenlänge außen
-    const hoehe = 2;          // Höhe
-    const wand = 0.15;        // Wandstärke (muss größer als 2 * rundung sein!)
-    const bodenDicke = 0.3;   // Dicke des Topfbodens
-    const rundung = 0.05;     // Rundung der oberen/unteren Kanten
-    const ecke = 0.15;        // Rundung der senkrechten Ecken
-    const erdeAbstand = 0.2;  // wie tief die Erde unter dem Rand liegt
+    const seite = 2;
+    const hoehe = 2;
+    const wand = 0.15;
+    const bodenDicke = 0.3;
+    const rundung = 0.05;
+    const ecke = 0.15;
+    const erdeAbstand = 0.2;
 
-    // Quadrat mit runden Ecken als 2D-Form
     function rundesQuadrat(groesse, radius) {
       const h = groesse / 2;
       const s = new THREE.Shape();
@@ -68,8 +96,6 @@
       return s;
     }
 
-    // 2D-Form nach oben ziehen (mit abgerundeten Ober-/Unterkanten),
-    // dann Flächen glätten
     function ziehen(form, laenge) {
       const g = new THREE.ExtrudeGeometry(form, {
         depth: laenge - 2 * rundung,
@@ -79,8 +105,8 @@
         bevelSegments: 6,
         curveSegments: 16
       });
-      g.rotateX(-Math.PI / 2);                 // z-Achse wird zur Höhe
-      g.translate(0, -hoehe / 2 + rundung, 0); // Unterkante auf -hoehe/2
+      g.rotateX(-Math.PI / 2);
+      g.translate(0, -hoehe / 2 + rundung, 0);
       g.deleteAttribute('normal');
       g.deleteAttribute('uv');
       const glatt = mergeVertices(g);
@@ -90,17 +116,14 @@
 
     const weiss = new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 0.6 });
 
-    // Topfwand: Ring mit Loch (Bevel verkleinert das Loch, daher + 2*rundung)
     const wandForm = rundesQuadrat(seite - 2 * rundung, ecke);
     wandForm.holes.push(rundesQuadrat(seite - 2 * wand + 2 * rundung, ecke));
     scene.add(new THREE.Mesh(ziehen(wandForm, hoehe), weiss));
 
-    // Topfboden (geschlossene Platte, unten abgerundet)
     scene.add(new THREE.Mesh(
       ziehen(rundesQuadrat(seite - 2 * rundung, ecke), bodenDicke), weiss
     ));
 
-    // Erde: abgerundeter Block, unterhalb des Randes
     const innen = seite - 2 * wand - 0.02;
     const erdeOben = hoehe / 2 - erdeAbstand;
     const erdeUnten = -hoehe / 2 + bodenDicke - 0.05;
@@ -111,30 +134,107 @@
     erde.position.y = (erdeOben + erdeUnten) / 2;
     scene.add(erde);
 
-    // Boden-Gitter zur Orientierung
     const gitter = new THREE.GridHelper(10, 20, 0x555555, 0x333333);
     gitter.position.y = -hoehe / 2 - 0.03;
     scene.add(gitter);
 
-    // Maussteuerung
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.target.set(0, 0, 0);
 
-    // Fenstergröße anpassen
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     });
 
-    // Render-Schleife
     function animate() {
       requestAnimationFrame(animate);
       controls.update();
       renderer.render(scene, camera);
     }
     animate();
+
+    // ---- Bodenfeuchtigkeit visualisieren ----
+    const trocken = new THREE.Color(0xa17b51);
+    const feucht = new THREE.Color(0x24180f);
+    const moistureText = document.getElementById('moisture');
+    const statusText = document.getElementById('status');
+    const login = document.getElementById('login');
+    const disconnectButton = document.getElementById('disconnect');
+    let client = null;
+
+    function updateMoisture(value) {
+      if (typeof value !== 'number' || !Number.isFinite(value)) return;
+      const moisture = THREE.MathUtils.clamp(value, 0, 100);
+      moistureText.textContent = `${Math.round(moisture)} %`;
+      erde.material.color.copy(trocken).lerp(feucht, moisture / 100);
+    }
+
+    login.addEventListener('submit', (event) => {
+      event.preventDefault();
+      if (client) client.end(true);
+
+      const host = document.getElementById('host').value.trim();
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+      if (!/^[a-zA-Z0-9.-]+$/.test(host)) {
+        statusText.textContent = 'Ungültiger Hostname';
+        return;
+      }
+      statusText.textContent = 'Verbinde …';
+      const connection = mqtt.connect(`wss://${host}:8084/mqtt`, {
+        username,
+        password,
+        clientId: `plant-twin-${crypto.randomUUID()}`,
+        reconnectPeriod: 3000,
+        connectTimeout: 10000
+      });
+      client = connection;
+
+      connection.on('connect', () => {
+        if (client !== connection) return;
+        statusText.textContent = '● MQTT verbunden – warte auf Messwerte';
+        login.hidden = true;
+        disconnectButton.hidden = false;
+        connection.subscribe('plantpot/01/moisture', { qos: 0 }, (error) => {
+          if (error) statusText.textContent = `Abo fehlgeschlagen: ${error.message}`;
+        });
+      });
+
+      connection.on('message', (topic, message) => {
+        if (client !== connection || topic !== 'plantpot/01/moisture') return;
+        try {
+          const data = JSON.parse(message.toString());
+          if (typeof data.moisture !== 'number' || !Number.isFinite(data.moisture)) return;
+          updateMoisture(data.moisture);
+          statusText.textContent = `● MQTT verbunden · letzter Empfang ${new Date().toLocaleTimeString('de-DE')}`;
+        } catch (error) {
+          console.warn('Ungültige MQTT-Nachricht:', error);
+        }
+      });
+
+      connection.on('reconnect', () => {
+        if (client === connection) statusText.textContent = 'Verbindung wird wiederhergestellt …';
+      });
+      connection.on('offline', () => {
+        if (client === connection) statusText.textContent = 'Offline – erneuter Versuch …';
+      });
+      connection.on('error', (error) => {
+        if (client === connection) statusText.textContent = `MQTT-Fehler: ${error.message}`;
+        console.error('MQTT:', error);
+      });
+    });
+
+    disconnectButton.addEventListener('click', () => {
+      if (client) client.end(true);
+      client = null;
+      login.hidden = false;
+      disconnectButton.hidden = true;
+      document.getElementById('password').value = '';
+      statusText.textContent = 'Nicht verbunden';
+    });
   </script>
 </body>
 </html>
