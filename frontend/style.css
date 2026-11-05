@@ -1,0 +1,37 @@
+/*
+ * style.css
+ * Legt das Erscheinungsbild des Dashboards, der Statusanzeigen und der
+ * MQTT-Anmeldung fest. Enthält ausschließlich Präsentationsregeln.
+ */
+/* Globale Grundfarben und Darstellung. */
+:root { color-scheme: dark; font-family: system-ui, sans-serif; }
+* { box-sizing: border-box; }
+html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; }
+body { background: #1e232b; color: #eee; }
+canvas { display: block; }
+/* Dashboard als schwebende Bedienfläche über der Three.js-Szene. */
+.dashboard {
+  position: fixed; top: 16px; left: 16px; z-index: 2;
+  width: min(310px, calc(100vw - 32px)); padding: 18px;
+  background: rgba(17, 22, 29, 0.94); border: 1px solid #343b46;
+  border-radius: 14px; box-shadow: 0 10px 28px #0004;
+}
+.dashboard-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+h1 { font-size: 18px; margin: 0 0 14px; }
+.indicator { width: 10px; height: 10px; border-radius: 50%; background: #7d8795; flex-shrink: 0; }
+.indicator.connected { background: #64c99b; }
+.measurement-label { color: #bcc5d0; font-size: 13px; }
+.measurement { font-size: 34px; font-weight: 700; margin: 4px 0; font-variant-numeric: tabular-nums; }
+.status, .model-status { font-size: 12px; line-height: 1.5; color: #e8b975; overflow-wrap: anywhere; }
+.model-status { color: #aeb8c5; margin-top: 14px; }
+/* Ausklappbare MQTT-Anmeldung und Bedienelemente. */
+.connection-panel { margin-top: 16px; border-top: 1px solid #3a414b; padding-top: 11px; }
+.connection-panel summary { cursor: pointer; font-size: 13px; font-weight: 600; }
+.login-form { margin-top: 10px; }
+label { display: block; font-size: 12px; margin: 9px 0 4px; color: #c9d0d8; }
+input { display: block; width: 100%; padding: 9px; border-radius: 6px; background: #282f3a; border: 1px solid #4c5562; color: white; }
+input:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid #64c99b; outline-offset: 2px; }
+button { cursor: pointer; margin-top: 12px; padding: 10px 12px; border: 0; border-radius: 7px; font-weight: 650; background: #64c99b; color: #14231b; }
+button.secondary { background: #b9c2cf; color: #17202b; }
+[hidden] { display: none !important; }
+.hint { color: #929daa; font-size: 11px; margin: 14px 0 0; }
