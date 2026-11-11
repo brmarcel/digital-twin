@@ -6,6 +6,7 @@
  */
 import mqtt from 'mqtt';
 import { PUMP_TOPICS, parsePumpState, validatePumpConfig } from './pump.js';
+import { WATER_LEVEL_TOPIC, parseWaterLevel } from './waterLevel.js';
 
 const MOISTURE_TOPIC = 'plantpot/01/moisture';
 const MQTT_PORT = 8084;
@@ -14,6 +15,7 @@ const CONNECT_TIMEOUT_MS = 10000;
 const HOSTNAME_PATTERN = /^[a-zA-Z0-9.-]+$/;
 const SUBSCRIPTION_TOPICS = [
   MOISTURE_TOPIC,
+  WATER_LEVEL_TOPIC,
   PUMP_TOPICS.availability,
   PUMP_TOPICS.state,
   PUMP_TOPICS.configState
@@ -24,6 +26,7 @@ const SUBSCRIPTION_TOPICS = [
  *
  * @param {Object} callbacks - Rückmeldungen an die Anwendung.
  * @param {(value: number) => void} callbacks.onMoisture - Empfangener Feuchtigkeitswert.
+ * @param {(level: object) => void} callbacks.onWaterLevel - Validierter Wasservorrat oder Fehlerzustand.
  * @param {(message: string, connected?: boolean) => void} callbacks.onStatus - Verbindungsstatus.
  * @param {(connected: boolean) => void} callbacks.onConnectionChange - MQTT-Verbindungswechsel.
  * @param {(status: 'online'|'offline'|'unknown') => void} callbacks.onPumpAvailability - Gerätestatus.
@@ -33,7 +36,7 @@ const SUBSCRIPTION_TOPICS = [
  *            stopPump: Function, setPumpMode: Function, setPumpConfig: Function}}
  */
 export function createMqtt({
-  onMoisture, onStatus, onConnectionChange,
+  onMoisture, onWaterLevel, onStatus, onConnectionChange,
   onPumpAvailability, onPumpState, onPumpConfig
 }) {
   let client = null;
@@ -66,6 +69,9 @@ export function createMqtt({
         if (typeof data?.moisture !== 'number' || !Number.isFinite(data.moisture)) return;
         onMoisture(data.moisture);
         onStatus(`● MQTT verbunden · letzter Empfang ${new Date().toLocaleTimeString('de-DE')}`, true);
+      } else if (topic === WATER_LEVEL_TOPIC) {
+        onWaterLevel(parseWaterLevel(data));
+        onStatus(`● MQTT verbunden · letzter Empfang ${new Date().toLocaleTimeString('de-DE')}`, true);
       } else if (topic === PUMP_TOPICS.state) {
         const state = parsePumpState(data);
         if (state) onPumpState(state);
@@ -77,6 +83,7 @@ export function createMqtt({
         }
       }
     } catch (error) {
+      if (topic === WATER_LEVEL_TOPIC) onWaterLevel({ valid: false, reason: 'invalid' });
       console.warn(`Ungültige MQTT-Nachricht auf ${topic}:`, error);
     }
   }

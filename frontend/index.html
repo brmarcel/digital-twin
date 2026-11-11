@@ -1,16 +1,16 @@
 <!DOCTYPE html>
 <!--
   index.html
-  Benutzeroberfläche für den digitalen Blumentopf: Messwert, MQTT-Anmeldung,
-  Pumpensteuerung und 3D-Darstellung. Logik liegt in den JS-Modulen.
+  Dreispaltiges Dashboard: links Monitoring, Mitte 3D-Modell, rechts Steuerung.
+  Die bestehende MQTT-/Pumpenlogik bleibt in den JavaScript-Modulen.
 -->
 <html lang="de">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Digitaler Zwilling – Blumentopf</title>
+  <meta name="theme-color" content="#111820">
+  <title>Digitaler Blumentopf – Digital Twin</title>
   <link rel="stylesheet" href="./style.css">
-  <!-- Verwendete Bibliotheken als ES-Module bereitstellen. -->
   <script type="importmap">
   {
     "imports": {
@@ -23,113 +23,145 @@
   <script type="module" src="./js/main.js"></script>
 </head>
 <body>
-  <!-- Overlay über dem von Three.js erzeugten Canvas. -->
-  <aside class="dashboard" aria-label="Dashboard">
-    <div class="dashboard-header">
-      <h1>Digitaler Blumentopf</h1>
-      <span id="connection-indicator" class="indicator" aria-hidden="true"></span>
-    </div>
-
-    <div class="measurement-label">Bodenfeuchtigkeit</div>
-    <div id="moisture" class="measurement" aria-live="polite">– %</div>
-    <div id="connection-status" class="status" role="status">Nicht verbunden</div>
-
-    <!-- Zugangsdaten werden nur im Browser zur Verbindung verwendet. -->
-    <details id="connection-panel" class="connection-panel">
-      <summary>MQTT-Verbindung</summary>
-      <form id="login" class="login-form">
-        <label for="host">EMQX-Host</label>
-        <input id="host" placeholder="cluster.emqxsl.com" autocomplete="url" required>
-        <label for="username">Benutzername (Steuerrechte erforderlich)</label>
-        <input id="username" autocomplete="username" required>
-        <label for="password">Passwort</label>
-        <input id="password" type="password" autocomplete="off" required>
-        <button type="submit">Verbinden</button>
-      </form>
-      <button id="disconnect" type="button" class="secondary" hidden>Verbindung trennen</button>
-      <p class="help-text">Keine Zugangsdaten in öffentliche Dateien schreiben. Der MQTT-Benutzer benötigt eng begrenzte Rechte für diesen Blumentopf.</p>
-    </details>
-
-    <details class="pump-panel" open>
-      <summary>Bewässerungssteuerung</summary>
-      <div class="pump-content">
-        <div class="pump-state-row">
-          <span>ESP32</span>
-          <span id="pump-availability" class="pump-badge">Status unbekannt</span>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-symbol" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21v-9M12 13C6 13 4 9 4 5c5 0 8 2 8 8ZM12 16c6 0 8-4 8-8-5 0-8 2-8 8Z"/></svg>
         </div>
-        <div class="pump-state-row">
-          <span>Pumpe</span>
-          <strong id="pump-state">Unbekannt</strong>
+        <div>
+          <h1>Digitaler Blumentopf</h1>
+          <p>Digital Twin <span class="brand-separator">/</span> Monitoring & Steuerung</p>
         </div>
-        <div class="pump-state-row">
-          <span>Betriebsart</span>
-          <strong id="pump-current-mode">–</strong>
+      </div>
+      <div class="connection-chip" role="status" aria-live="polite">
+        <span id="connection-indicator" class="indicator" aria-hidden="true"></span>
+        <span id="connection-label">Nicht verbunden</span>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <!-- Links: ausschließlich Messwerte und Geräte-Istzustände. -->
+      <aside class="sidebar monitoring-sidebar" aria-labelledby="monitoring-title">
+        <div class="sidebar-heading">
+          <div><div class="eyebrow">ÜBERSICHT</div><h2 id="monitoring-title">Monitoring</h2></div>
+          <span class="panel-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18M7 14l4-4 4 3 5-7"/></svg></span>
         </div>
 
-        <div class="mode-actions" role="group" aria-label="Betriebsart wählen">
-          <button id="pump-mode-manual" class="mode-button" type="button" disabled>Manuell</button>
-          <button id="pump-mode-auto" class="mode-button" type="button" disabled>Automatisch</button>
+        <section class="metric-card moisture-card" aria-labelledby="moisture-title">
+          <div class="metric-heading">
+            <span class="metric-icon moisture-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3C9 7.3 6 10.4 6 14a6 6 0 0 0 12 0c0-3.6-3-6.7-6-11Z"/></svg></span>
+            <h3 id="moisture-title">Bodenfeuchtigkeit</h3>
+          </div>
+          <div class="metric-number" id="moisture" aria-live="polite">– <span>%</span></div>
+          <div class="progress-track moisture-track" id="moisture-progress" role="progressbar" aria-label="Bodenfeuchtigkeit" aria-valuemin="0" aria-valuemax="100" aria-valuetext="Keine Messdaten">
+            <div class="progress-fill" id="moisture-fill"></div>
+          </div>
+          <div id="moisture-state" class="metric-detail">Warte auf Messwerte</div>
+        </section>
+
+        <section class="metric-card water-card" aria-labelledby="water-title">
+          <div class="metric-heading">
+            <span class="metric-icon water-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8c2 0 2 2 4 2s2-2 4-2 2 2 4 2 2-2 4-2M4 14c2 0 2 2 4 2s2-2 4-2 2 2 4 2 2-2 4-2"/></svg></span>
+            <h3 id="water-title">Wasservorrat</h3>
+          </div>
+          <div class="metric-number" id="water-level" aria-live="polite">– <span>%</span></div>
+          <div class="progress-track water-track" id="water-progress" role="progressbar" aria-label="Füllstand Wasservorrat" aria-valuemin="0" aria-valuemax="100" aria-valuetext="Keine Messdaten">
+            <div class="progress-fill" id="water-fill"></div>
+          </div>
+          <div class="water-volume" id="water-volume">– / 1.800 ml</div>
+          <div id="water-state" class="metric-detail" role="status">Warte auf Messwerte</div>
+        </section>
+
+        <section class="status-card" aria-labelledby="status-title">
+          <div class="section-kicker">GERÄTESTATUS</div>
+          <h3 id="status-title">System</h3>
+          <div class="status-row"><span>ESP32</span><span id="pump-availability" class="pump-badge">Unbekannt</span></div>
+          <div class="status-row"><span>Pumpe</span><strong id="pump-state">Unbekannt</strong></div>
+          <div class="status-row"><span>Betriebsart</span><strong id="pump-current-mode">–</strong></div>
+          <div class="status-divider"></div>
+          <div class="section-kicker">MQTT-VERBINDUNG</div>
+          <p id="connection-status" class="connection-details" role="status">Nicht verbunden</p>
+        </section>
+        <p class="sidebar-footnote">Angezeigt werden ausschließlich empfangene Messwerte und bestätigte Gerätezustände.</p>
+      </aside>
+
+      <!-- Mitte: unverändertes interaktives Three.js-Modell, jetzt in eigenem Container. -->
+      <section class="viewer" aria-label="Interaktive 3D-Ansicht des Blumentopfs">
+        <div id="scene-stage" class="scene-stage"></div>
+        <div class="viewer-top" aria-hidden="true"><span class="viewer-chip"><span class="viewer-chip-dot"></span>3D-ANSICHT</span></div>
+        <div class="viewer-bottom">
+          <div id="model-status" class="model-status" role="status">Lade 3D-Modell …</div>
+          <div class="viewer-hint">Ziehen zum Drehen <span>·</span> Scrollen zum Zoomen</div>
+        </div>
+      </section>
+
+      <!-- Rechts: alle Bedienfunktionen und MQTT-Einstellungen. -->
+      <aside class="sidebar controls-sidebar" aria-labelledby="control-title">
+        <div class="sidebar-heading">
+          <div><div class="eyebrow">KONFIGURATION</div><h2 id="control-title">Steuerung</h2></div>
+          <span class="panel-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 17h16M8 4v6M16 14v6"/></svg></span>
         </div>
 
-        <section aria-labelledby="manual-title" class="pump-section">
-          <h2 id="manual-title">Manuelle Bewässerung</h2>
-          <label for="pump-manual-duration">Laufzeit</label>
+        <section class="control-group" aria-labelledby="mode-title">
+          <div class="control-group-heading"><h3 id="mode-title">Betriebsart</h3><span class="microcopy">Ist-Zustand vom ESP32</span></div>
+          <div class="mode-actions" role="group" aria-label="Betriebsart wählen">
+            <button id="pump-mode-manual" class="mode-button" type="button" aria-pressed="false" disabled>Manuell</button>
+            <button id="pump-mode-auto" class="mode-button" type="button" aria-pressed="false" disabled>Automatisch</button>
+          </div>
+        </section>
+
+        <section class="control-group pump-section" id="manual-section" aria-labelledby="manual-title">
+          <div class="control-group-heading"><h3 id="manual-title">Manuelle Bewässerung</h3></div>
+          <label for="pump-manual-duration">Pumpenlaufzeit</label>
           <select id="pump-manual-duration">
-            <option value="3000">3 Sekunden</option>
-            <option value="5000" selected>5 Sekunden</option>
-            <option value="10000">10 Sekunden</option>
+            <option value="3000">3 Sekunden</option><option value="5000" selected>5 Sekunden</option><option value="10000">10 Sekunden</option>
           </select>
           <div class="pump-actions">
-            <button id="pump-start" type="button" disabled>Bewässerung starten</button>
+            <button id="pump-start" type="button" disabled>Bewässern</button>
             <button id="pump-stop" type="button" class="danger" disabled>Stopp</button>
           </div>
-          <p class="help-text">Ein Startbefehl läuft nur für die gewählte Zeit. „Stopp“ muss auf dem ESP32 auch die Automatik deaktivieren.</p>
+          <p class="help-text">Start nur im manuellen Modus. Stopp muss die Automatik am ESP32 ebenfalls deaktivieren.</p>
         </section>
 
-        <section aria-labelledby="auto-title" class="pump-section">
-          <h2 id="auto-title">Automatische Bewässerung</h2>
-          <div class="threshold-heading">
-            <label for="pump-threshold">Feuchtigkeit unter</label>
-            <output id="pump-threshold-value" for="pump-threshold">30 %</output>
-          </div>
+        <section class="control-group pump-section" id="auto-section" aria-labelledby="auto-title">
+          <div class="control-group-heading"><h3 id="auto-title">Automatische Bewässerung</h3></div>
+          <div class="threshold-heading"><label for="pump-threshold">Feuchtigkeit unter</label><output id="pump-threshold-value" for="pump-threshold">30 %</output></div>
           <input id="pump-threshold" type="range" min="10" max="60" step="5" value="30">
-
+          <div class="slider-ends"><span>10 %</span><span>60 %</span></div>
           <label for="pump-auto-duration">Pumpdauer je Intervall</label>
-          <select id="pump-auto-duration">
-            <option value="3000">3 Sekunden</option>
-            <option value="5000" selected>5 Sekunden</option>
-            <option value="10000">10 Sekunden</option>
-          </select>
-
+          <select id="pump-auto-duration"><option value="3000">3 Sekunden</option><option value="5000" selected>5 Sekunden</option><option value="10000">10 Sekunden</option></select>
           <label for="pump-pause">Wartezeit nach dem Pumpen</label>
-          <select id="pump-pause">
-            <option value="30000">30 Sekunden</option>
-            <option value="60000" selected>60 Sekunden</option>
-            <option value="120000">2 Minuten</option>
-            <option value="300000">5 Minuten</option>
-            <option value="600000">10 Minuten</option>
-          </select>
-
-          <label for="pump-max-cycles">Max. Bewässerungsintervalle je Durchlauf</label>
-          <select id="pump-max-cycles">
-            <option value="1">1</option>
-            <option value="2">2</option>
-            <option value="3" selected>3</option>
-            <option value="4">4</option>
-            <option value="5">5</option>
-          </select>
-
-          <button id="pump-save-config" class="secondary full-width" type="button" disabled>Einstellungen an ESP32 senden</button>
-          <p class="help-text">Erst nach Bestätigung der Einstellungen ist „Automatisch“ aktivierbar. Die Regelung läuft unabhängig von der Website auf dem ESP32.</p>
+          <select id="pump-pause"><option value="30000">30 Sekunden</option><option value="60000" selected>60 Sekunden</option><option value="120000">2 Minuten</option><option value="300000">5 Minuten</option><option value="600000">10 Minuten</option></select>
+          <label for="pump-max-cycles">Max. Intervalle pro Durchlauf</label>
+          <select id="pump-max-cycles"><option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option></select>
+          <button id="pump-save-config" class="secondary full-width" type="button" disabled>Einstellungen speichern</button>
+          <p class="help-text">Erst nach Bestätigung durch den ESP32 kann der Automatikmodus aktiviert werden.</p>
         </section>
 
-        <p id="pump-hint" class="help-text" aria-live="polite">Zuerst MQTT verbinden.</p>
-        <div id="pump-message" class="pump-message" role="status" aria-live="polite">Noch keine Pumpenbefehle gesendet.</div>
-      </div>
-    </details>
+        <div class="feedback-area">
+          <p id="pump-hint" class="pump-hint" aria-live="polite">Zuerst MQTT verbinden.</p>
+          <div id="pump-message" class="pump-message" role="status" aria-live="polite">Noch keine Pumpenbefehle gesendet.</div>
+        </div>
 
-    <div id="model-status" class="model-status">Lade 3D-Modell …</div>
-    <p class="hint">Maus ziehen: drehen · Mausrad: zoomen</p>
-  </aside>
+        <details id="connection-panel" class="connection-panel">
+          <summary>MQTT-Verbindung <span class="disclosure-note">Einstellungen</span></summary>
+          <div class="connection-content">
+            <form id="login" class="login-form">
+              <label for="host">EMQX-Host</label>
+              <input id="host" placeholder="cluster.emqxsl.com" autocomplete="url" required>
+              <label for="username">Benutzername</label>
+              <input id="username" autocomplete="username" required>
+              <label for="password">Passwort</label>
+              <input id="password" type="password" autocomplete="off" required>
+              <button type="submit" class="full-width">Verbinden</button>
+            </form>
+            <button id="disconnect" type="button" class="secondary full-width" hidden>Verbindung trennen</button>
+            <p class="help-text">Zugangsdaten nur im Browser eingeben, niemals im öffentlichen Repository hinterlegen.</p>
+          </div>
+        </details>
+      </aside>
+    </main>
+  </div>
 </body>
 </html>

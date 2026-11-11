@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const BACKGROUND_COLOR = 0x1e232b;
+const BACKGROUND_COLOR = 0x171f29;
 const GRID_SIZE = 10;
 const GRID_DIVISIONS = 20;
 const GRID_HEIGHT = -1.0;
@@ -21,13 +21,18 @@ export function createScene() {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(BACKGROUND_COLOR);
 
-  const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.01, 10000);
+  const stage = document.getElementById('scene-stage');
+  if (!stage) throw new Error('3D-Container #scene-stage fehlt.');
+
+  const width = () => Math.max(1, stage.clientWidth);
+  const height = () => Math.max(1, stage.clientHeight);
+  const camera = new THREE.PerspectiveCamera(45, width() / height(), 0.01, 10000);
   camera.position.set(3, 2, 4);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-  renderer.setSize(innerWidth, innerHeight);
-  document.body.appendChild(renderer.domElement);
+  renderer.setSize(width(), height());
+  stage.appendChild(renderer.domElement);
 
   scene.add(new THREE.HemisphereLight(0xffffff, 0x596273, 2.5));
 
@@ -67,11 +72,14 @@ export function createScene() {
     controls.update();
   }
 
-  window.addEventListener('resize', () => {
-    camera.aspect = innerWidth / innerHeight;
+  // Die 3D-Bühne ist nicht mehr das komplette Browserfenster.
+  // ResizeObserver berücksichtigt auch responsive Dashboard-Layoutwechsel.
+  const resizeObserver = new ResizeObserver(() => {
+    camera.aspect = width() / height();
     camera.updateProjectionMatrix();
-    renderer.setSize(innerWidth, innerHeight);
+    renderer.setSize(width(), height());
   });
+  resizeObserver.observe(stage);
 
   /** Zeichnet die Szene und aktualisiert die gedämpfte Kamerasteuerung. */
   function animate() {

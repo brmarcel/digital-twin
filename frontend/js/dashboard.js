@@ -4,6 +4,7 @@
  * Angezeigte Ist-Zustände kommen vom ESP32, nicht aus Klick-Ereignissen.
  */
 import { DEFAULT_PUMP_CONFIG } from './pump.js';
+import { WATER_CAPACITY_ML, WATER_STALE_AFTER_MS } from './waterLevel.js';
 
 /**
  * Erstellt das Dashboard und registriert die Benutzeraktionen.
@@ -21,8 +22,17 @@ export function createDashboard({
 }) {
   const get = id => document.getElementById(id);
   const moistureElement = get('moisture');
+  const moistureFill = get('moisture-fill');
+  const moistureProgress = get('moisture-progress');
+  const moistureState = get('moisture-state');
+  const waterElement = get('water-level');
+  const waterFill = get('water-fill');
+  const waterProgress = get('water-progress');
+  const waterVolume = get('water-volume');
+  const waterState = get('water-state');
   const statusElement = get('connection-status');
   const indicatorElement = get('connection-indicator');
+  const connectionLabel = get('connection-label');
   const modelStatusElement = get('model-status');
   const connectionPanel = get('connection-panel');
   const loginForm = get('login');
@@ -51,6 +61,52 @@ export function createDashboard({
   let confirmedConfig = null;
   let configDirty = true;
   let expectedConfig = null;
+  let lastWaterReceivedAt = null;
+  let lastMoistureReceivedAt = null;
+
+  /** Stellt fehlende/veraltete Feuchtewerte ausdrücklich als unbekannt dar. */
+  function resetMoisture(reason = 'waiting') {
+    lastMoistureReceivedAt = null;
+    moistureElement.firstChild.nodeValue = '– ';
+    moistureFill.style.width = '0%';
+    moistureProgress.removeAttribute('aria-valuenow');
+    const message = reason === 'stale' ? 'Keine aktuellen Messwerte' :
+      reason === 'offline' ? 'Aktuell keine Messdaten' : 'Warte auf Messwerte';
+    moistureProgress.setAttribute('aria-valuetext', message);
+    moistureState.textContent = message;
+  }
+
+  /** Ungültige Wasserdaten dürfen nicht wie ein leerer Tank aussehen. */
+  function resetWater(reason = 'waiting') {
+    lastWaterReceivedAt = null;
+    waterElement.firstChild.nodeValue = '– ';
+    waterFill.style.width = '0%';
+    waterProgress.classList.remove('warning', 'critical');
+    waterProgress.removeAttribute('aria-valuenow');
+    waterVolume.textContent = `– / ${WATER_CAPACITY_ML.toLocaleString('de-DE')} ml`;
+    waterState.classList.remove('warning', 'critical');
+    const message = {
+      waiting: 'Warte auf Messwerte',
+      sensor: 'Sensorfehler – Füllstand unbekannt',
+      invalid: 'Ungültige Sensordaten',
+      stale: 'Keine aktuellen Messwerte',
+      offline: 'Aktuell keine Messdaten'
+    }[reason] ?? 'Füllstand unbekannt';
+    waterProgress.setAttribute('aria-valuetext', message);
+    waterState.textContent = message;
+  }
+
+  /** Veraltet empfangene Werte werden ausgeblendet, statt weiter als live zu gelten. */
+  window.setInterval(() => {
+    if (!mqttConnected) return;
+    const now = Date.now();
+    if (lastWaterReceivedAt !== null && now - lastWaterReceivedAt > WATER_STALE_AFTER_MS) {
+      resetWater('stale');
+    }
+    if (lastMoistureReceivedAt !== null && now - lastMoistureReceivedAt > WATER_STALE_AFTER_MS) {
+      resetMoisture('stale');
+    }
+  }, 10_000);
 
   /** @returns {{thresholdPct: number, durationMs: number, pauseMs: number, maxCycles: number}} Eingestellte Automatikwerte. */
   function readConfig() {
@@ -91,6 +147,8 @@ export function createDashboard({
     saveConfigButton.disabled = !deviceReady;
     manualModeButton.classList.toggle('selected', isManual);
     autoModeButton.classList.toggle('selected', deviceReady && pumpState.mode === 'auto');
+    manualModeButton.setAttribute('aria-pressed', String(isManual));
+    autoModeButton.setAttribute('aria-pressed', String(deviceReady && pumpState.mode === 'auto'));
 
     const deviceHint = !mqttConnected ? 'Zuerst MQTT verbinden.' :
       !pumpAvailable ? 'Warte auf Online-Meldung des ESP32.' :
@@ -138,7 +196,45 @@ export function createDashboard({
   return {
     /** @param {number} value - Bodenfeuchtigkeit in Prozent. */
     showMoisture(value) {
-      moistureElement.textContent = `${Math.round(value)} %`;
+      const rounded = Math.round(value);
+      lastMoistureReceivedAt = Date.now();
+      moistureElement.firstChild.nodeValue = `${rounded} `;
+      moistureFill.style.width = `${value}%`;
+      moistureProgress.setAttribute('aria-valuenow', String(rounded));
+      moistureProgress.setAttribute('aria-valuetext', `${rounded} Prozent`);
+      moistureState.textContent = 'Messwert aktuell';
+    },
+
+    /**
+     * @param {{valid: boolean, volumeMl?: number, percent?: number, reason?: string}} level
+     *   Vom ESP32 gemessener Wasservorrat (bereits validiert).
+     */
+    showWaterLevel(level) {
+      if (!level?.valid) {
+        resetWater(level?.reason ?? 'invalid');
+        return;
+      }
+      lastWaterReceivedAt = Date.now();
+      const roundedPercent = Math.round(level.percent);
+      const roundedVolume = Math.round(level.volumeMl);
+      waterElement.firstChild.nodeValue = `${roundedPercent} `;
+      waterFill.style.width = `${level.percent}%`;
+      waterProgress.setAttribute('aria-valuenow', String(roundedPercent));
+      waterProgress.setAttribute('aria-valuetext', `${roundedPercent} Prozent, ${roundedVolume} Milliliter`);
+      waterVolume.textContent = `${roundedVolume.toLocaleString('de-DE')} / ${WATER_CAPACITY_ML.toLocaleString('de-DE')} ml`;
+      waterProgress.classList.remove('warning', 'critical');
+      waterState.classList.remove('warning', 'critical');
+      if (level.percent < 10) {
+        waterProgress.classList.add('critical');
+        waterState.classList.add('critical');
+        waterState.textContent = 'Kritischer Füllstand – nachfüllen';
+      } else if (level.percent <= 20) {
+        waterProgress.classList.add('warning');
+        waterState.classList.add('warning');
+        waterState.textContent = 'Wasser bald nachfüllen';
+      } else {
+        waterState.textContent = 'Ausreichend Wasser';
+      }
     },
 
     /**
@@ -148,6 +244,7 @@ export function createDashboard({
     showStatus(message, connected = false) {
       statusElement.textContent = message;
       indicatorElement.classList.toggle('connected', connected);
+      connectionLabel.textContent = connected ? 'MQTT verbunden' : 'Nicht verbunden';
     },
 
     /** @param {string} message - Meldung zum 3D-Modell. */
@@ -162,6 +259,8 @@ export function createDashboard({
       disconnectButton.hidden = !connected;
       connectionPanel.open = !connected;
       if (!connected) passwordInput.value = '';
+      resetMoisture(connected ? 'waiting' : 'offline');
+      resetWater(connected ? 'waiting' : 'offline');
       updateControls();
     },
 
@@ -171,6 +270,11 @@ export function createDashboard({
       availabilityElement.textContent = availability === 'online' ? 'ESP32 online' :
         availability === 'offline' ? 'ESP32 offline' : 'Status unbekannt';
       availabilityElement.classList.toggle('online', pumpAvailable);
+      availabilityElement.classList.toggle('offline', availability === 'offline');
+      if (availability === 'offline') {
+        resetMoisture('offline');
+        resetWater('offline');
+      }
       if (!pumpAvailable) {
         pumpState = null;
         stateElement.textContent = 'Unbekannt';

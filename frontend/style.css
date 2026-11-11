@@ -1,75 +1,166 @@
-/*
- * style.css
- * Dashboard, Pumpensteuerung und MQTT-Verbindung über der Three.js-Szene.
+/**
+ * style.css – ruhiges, responsives Dashboard im Dark Mode.
+ * Drei Funktionszonen: Monitoring | 3D-Modell | Steuerung.
  */
-:root { color-scheme: dark; font-family: system-ui, sans-serif; }
+:root {
+  color-scheme: dark;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  --bg: #101720;
+  --surface: #18222e;
+  --card: #1e2a37;
+  --card-raised: #22303e;
+  --border: #2b3b4b;
+  --text: #edf2f7;
+  --muted: #98aaba;
+  --faint: #778b9e;
+  --green: #68d3aa;
+  --blue: #65bfea;
+  --amber: #efc178;
+  --red: #f18f8d;
+}
 * { box-sizing: border-box; }
-html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; }
-body { background: #1e232b; color: #eee; }
-canvas { display: block; }
-
-/* Das Dashboard bleibt auch mit den zusätzlichen Pumpenoptionen scrollbar. */
-.dashboard {
-  position: fixed; top: 16px; left: 16px; z-index: 2;
-  width: min(330px, calc(100vw - 32px));
-  max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain;
-  padding: 18px;
-  background: rgba(17, 22, 29, 0.94); border: 1px solid #343b46;
-  border-radius: 14px; box-shadow: 0 10px 28px #0004;
-}
-.dashboard-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-h1 { font-size: 18px; margin: 0 0 14px; }
-h2 { font-size: 13px; margin: 0 0 10px; }
-.indicator { width: 10px; height: 10px; border-radius: 50%; background: #7d8795; flex-shrink: 0; }
-.indicator.connected { background: #64c99b; }
-.measurement-label { color: #bcc5d0; font-size: 13px; }
-.measurement { font-size: 34px; font-weight: 700; margin: 4px 0; font-variant-numeric: tabular-nums; }
-.status, .model-status { font-size: 12px; line-height: 1.5; color: #e8b975; overflow-wrap: anywhere; }
-.model-status { color: #aeb8c5; margin-top: 14px; }
-
-/* Aufklappbare Bereiche und Eingabefelder. */
-.connection-panel, .pump-panel { margin-top: 16px; border-top: 1px solid #3a414b; padding-top: 11px; }
-.connection-panel summary, .pump-panel summary { cursor: pointer; font-size: 13px; font-weight: 650; }
-.login-form, .pump-content { margin-top: 12px; }
-label { display: block; font-size: 12px; margin: 9px 0 4px; color: #c9d0d8; }
-input:not([type="range"]), select {
-  display: block; width: 100%; padding: 9px; border-radius: 6px;
-  background: #282f3a; border: 1px solid #4c5562; color: white;
-}
-input[type="range"] { width: 100%; accent-color: #64c99b; margin: 4px 0 5px; }
-input:focus-visible, select:focus-visible, button:focus-visible, summary:focus-visible {
-  outline: 2px solid #64c99b; outline-offset: 2px;
-}
-button {
-  cursor: pointer; margin-top: 12px; padding: 10px 12px; border: 0;
-  border-radius: 7px; font-weight: 650; background: #64c99b; color: #14231b;
-}
-button.secondary { background: #b9c2cf; color: #17202b; }
-button.danger { background: #e7a29f; color: #341919; }
-button:disabled { cursor: not-allowed; opacity: 0.46; }
+html, body { margin: 0; width: 100%; min-height: 100%; }
+body { background: var(--bg); color: var(--text); }
+button, input, select { font: inherit; }
+button { -webkit-tap-highlight-color: transparent; }
 [hidden] { display: none !important; }
-.hint, .help-text { color: #929daa; font-size: 11px; line-height: 1.5; margin: 9px 0 0; }
-.hint { margin-top: 14px; }
+.app-shell { height: 100dvh; min-height: 540px; display: flex; flex-direction: column; padding: 16px; gap: 14px; }
 
-/* Status und Modi zeigen nur vom ESP32 gemeldete Ist-Werte. */
-.pump-state-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; margin: 9px 0; }
-.pump-state-row > span:first-child { color: #b8c3ce; }
-.pump-state-row strong { font-size: 12px; }
-.pump-state-row .running { color: #64c99b; }
-.pump-badge { color: #d5b77b; border-radius: 6px; background: #3c3832; padding: 4px 7px; font-size: 11px; }
-.pump-badge.online { color: #85dcb0; background: #234838; }
-.mode-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
-.mode-actions button { margin: 0; background: #343d49; color: #d6dee8; border: 1px solid #536070; }
-.mode-actions button.selected { background: #234838; color: #a6f0c6; border-color: #64c99b; opacity: 1; }
-.pump-section { border-top: 1px solid #343b46; margin-top: 13px; padding-top: 13px; }
-.pump-actions { display: flex; gap: 8px; }
-.pump-actions button:first-child { flex: 1; }
-.pump-actions button:last-child { flex: 0 0 70px; }
+/* Oberer Anwendungsrahmen */
+.app-header { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; min-height: 63px; gap: 18px; padding: 0 8px; }
+.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.brand-symbol { width: 38px; height: 38px; flex: 0 0 auto; display: grid; place-items: center; background: #214438; border: 1px solid #2f594a; color: #91e1ba; border-radius: 11px; }
+.brand-symbol svg { width: 23px; height: 23px; }
+h1, h2, h3, p { margin-top: 0; }
+h1 { font-size: 17px; line-height: 1.25; letter-spacing: -.35px; font-weight: 680; margin: 0; }
+.brand p { font-size: 11px; color: var(--muted); margin: 4px 0 0; }
+.brand-separator { margin: 0 4px; color: #566b7e; }
+.connection-chip { display: flex; align-items: center; gap: 8px; white-space: nowrap; background: #1c2834; border: 1px solid var(--border); border-radius: 999px; padding: 8px 12px; font-size: 11px; color: var(--muted); }
+.indicator { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: #758598; }
+.indicator.connected { background: var(--green); box-shadow: 0 0 0 3px #68d3aa1b; }
+
+/* Desktop: Seitenbereiche fest, Mitte füllt den restlichen Platz. */
+.workspace { display: grid; grid-template-columns: 292px minmax(0, 1fr) 342px; grid-template-areas: "monitor viewer controls"; align-items: stretch; gap: 14px; flex: 1 1 auto; min-height: 0; }
+.sidebar { border: 1px solid var(--border); background: var(--surface); border-radius: 16px; min-width: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #405366 transparent; padding: 22px 18px; }
+.monitoring-sidebar { grid-area: monitor; }
+.controls-sidebar { grid-area: controls; }
+.sidebar-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 24px; }
+.sidebar-heading h2 { font-size: 18px; letter-spacing: -.4px; font-weight: 680; margin: 6px 0 0; }
+.eyebrow, .section-kicker { letter-spacing: 1.25px; font-weight: 700; font-size: 9px; color: var(--faint); }
+.panel-icon { display: grid; place-items: center; height: 31px; width: 31px; flex: 0 0 auto; color: #b7c5d2; background: var(--card); border: 1px solid var(--border); border-radius: 9px; }
+.panel-icon svg, .metric-icon svg { width: 17px; height: 17px; }
+
+/* Messwertkarten */
+.metric-card, .status-card { padding: 18px 16px; background: var(--card); border: 1px solid #314151; border-radius: 12px; margin-bottom: 12px; }
+.metric-heading { display: flex; align-items: center; gap: 10px; }
+.metric-heading h3 { font-size: 12px; line-height: 1.3; font-weight: 640; margin: 0; }
+.metric-icon { width: 29px; height: 29px; display: grid; place-items: center; border-radius: 9px; flex: 0 0 auto; }
+.moisture-icon { color: var(--green); background: #254438; }
+.water-icon { color: var(--blue); background: #203c52; }
+.metric-number { font-variant-numeric: tabular-nums; font-size: 38px; letter-spacing: -1.4px; font-weight: 700; line-height: 1.2; margin: 20px 0 13px; }
+.metric-number span { color: var(--muted); font-size: 22px; font-weight: 550; letter-spacing: -.2px; }
+.progress-track { height: 7px; background: #344655; border-radius: 999px; overflow: hidden; }
+.progress-fill { height: 100%; width: 0; border-radius: 999px; transition: width 350ms ease, background-color 250ms ease; }
+.moisture-track .progress-fill { background: var(--green); }
+.water-track .progress-fill { background: var(--blue); }
+.water-track.warning .progress-fill { background: var(--amber); }
+.water-track.critical .progress-fill { background: var(--red); }
+.metric-detail { font-size: 11px; color: var(--muted); line-height: 1.5; margin-top: 12px; min-height: 16px; }
+.metric-detail.warning { color: var(--amber); }
+.metric-detail.critical { color: var(--red); }
+.water-volume { font-size: 12px; color: #d2deeb; margin-top: 12px; font-variant-numeric: tabular-nums; }
+.water-card .metric-detail { margin-top: 6px; }
+
+/* Geräte- und Kommunikationsstatus (nur Ist-Zustände) */
+.status-card { padding-top: 20px; }
+.status-card h3 { font-size: 14px; margin: 6px 0 18px; font-weight: 660; }
+.status-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 14px 0; font-size: 11px; }
+.status-row > span:first-child { color: var(--muted); }
+.status-row strong { text-align: right; font-size: 11px; font-weight: 600; }
+.status-row .running { color: var(--green); }
+.pump-badge { color: var(--amber); border-radius: 6px; background: #41372d; padding: 5px 8px; font-size: 10px; line-height: 1.3; text-align: right; }
+.pump-badge.online { color: var(--green); background: #23463b; }
+.pump-badge.offline { color: var(--red); background: #4a3035; }
+.status-divider { margin: 18px 0; height: 1px; background: var(--border); }
+.connection-details { color: var(--muted); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; margin: 9px 0 0; }
+.sidebar-footnote { font-size: 10px; color: var(--faint); line-height: 1.55; padding: 2px 5px 0; }
+
+/* Eigenständige Bühne: OrbitControls reagieren ausschließlich auf das Canvas. */
+.viewer { grid-area: viewer; min-width: 0; min-height: 0; background: #171f29; border: 1px solid var(--border); border-radius: 16px; overflow: hidden; position: relative; isolation: isolate; }
+.scene-stage, .scene-stage canvas { display: block; width: 100%; height: 100%; }
+.scene-stage { position: absolute; inset: 0; }
+.scene-stage canvas { outline: 0; touch-action: none; }
+.viewer-top { position: absolute; top: 18px; left: 18px; z-index: 1; pointer-events: none; }
+.viewer-chip { display: flex; align-items: center; gap: 8px; color: #b4c4d3; background: #1a2632d9; border: 1px solid #354658; border-radius: 7px; font-size: 9px; font-weight: 750; letter-spacing: 1px; padding: 8px 11px; }
+.viewer-chip-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+.viewer-bottom { position: absolute; bottom: 18px; left: 0; right: 0; z-index: 1; text-align: center; padding: 0 20px; pointer-events: none; }
+.model-status { font-size: 10px; color: #a6b7c6; line-height: 1.5; margin-bottom: 6px; overflow-wrap: anywhere; }
+.viewer-hint { color: #899bac; font-size: 10px; }
+.viewer-hint span { padding: 0 5px; }
+
+/* Steuerung */
+.control-group { margin-bottom: 19px; }
+.control-group + .control-group { padding-top: 18px; border-top: 1px solid var(--border); }
+.control-group-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 11px; }
+.control-group-heading h3 { font-size: 12px; font-weight: 700; margin: 0; }
+.microcopy { font-size: 9px; color: var(--faint); text-align: right; }
+.mode-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.mode-actions button { margin: 0; background: #223140; border: 1px solid #3a4b5a; color: #b8c8d6; }
+.mode-actions button.selected { background: #244a3b; color: #bbf1d2; border-color: #448d71; opacity: 1; }
+.mode-actions button:disabled:not(.selected) { opacity: .5; }
+label { display: block; font-size: 11px; font-weight: 540; color: #b8c6d3; margin: 11px 0 6px; }
+input:not([type="range"]), select { background: #202e3b; border: 1px solid #3b4e5d; border-radius: 8px; display: block; width: 100%; padding: 9px 11px; font-size: 12px; color: var(--text); min-height: 38px; }
+input::placeholder { color: #70859a; }
+input[type="range"] { width: 100%; margin: 5px 0 0; cursor: pointer; accent-color: var(--green); }
+input:focus-visible, select:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
+button { background: var(--green); color: #122a21; border: 1px solid transparent; border-radius: 8px; font-size: 12px; font-weight: 700; padding: 10px 13px; min-height: 38px; cursor: pointer; transition: background-color 120ms ease, border-color 120ms ease; }
+button:hover:not(:disabled) { filter: brightness(1.07); }
+button:disabled { opacity: .42; cursor: not-allowed; }
+button.secondary { color: #d7e4ee; background: #2d4351; border-color: #446072; }
+button.danger { color: #f9d8d8; background: #593639; border-color: #875155; }
 .full-width { width: 100%; }
-.threshold-heading { display: flex; align-items: baseline; justify-content: space-between; }
-.threshold-heading output { font-weight: 700; font-size: 12px; }
-.pump-message { font-size: 11px; line-height: 1.5; color: #e8b975; padding-top: 9px; overflow-wrap: anywhere; }
+.pump-actions { display: grid; grid-template-columns: minmax(0, 1fr) 76px; gap: 8px; margin-top: 11px; }
+.threshold-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 5px; }
+.threshold-heading label { margin-bottom: 7px; }
+.threshold-heading output { color: var(--green); font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.slider-ends { display: flex; justify-content: space-between; margin-top: 1px; color: var(--faint); font-size: 9px; }
+#pump-save-config { margin-top: 16px; }
+.help-text { font-size: 10px; color: var(--faint); line-height: 1.5; margin: 9px 0 0; }
+.pump-hint { font-size: 10px; color: var(--amber); line-height: 1.5; margin: 0; }
+.pump-hint:empty { display: none; }
+.pump-message { font-size: 10px; line-height: 1.6; color: #aec6d7; overflow-wrap: anywhere; }
+.feedback-area { background: #1e2b38; border: 1px solid #30404f; padding: 12px; border-radius: 10px; display: grid; gap: 6px; margin-bottom: 20px; }
+.connection-panel { border-top: 1px solid var(--border); padding-top: 17px; margin-top: 0; }
+.connection-panel summary { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 670; cursor: pointer; list-style: none; }
+.connection-panel summary::-webkit-details-marker { display: none; }
+.connection-panel summary::before { content: ''; width: 6px; height: 6px; border-bottom: 1.5px solid var(--muted); border-right: 1.5px solid var(--muted); transform: rotate(-45deg); transition: transform .2s ease; }
+.connection-panel[open] summary::before { transform: rotate(45deg); }
+.disclosure-note { margin-left: auto; font-size: 10px; font-weight: 400; color: var(--faint); }
+.connection-content { padding-top: 13px; }
+.login-form button, #disconnect { margin-top: 12px; }
 
-@media (max-width: 480px) {
-  .dashboard { top: 8px; left: 8px; width: calc(100vw - 16px); max-height: calc(100dvh - 16px); }
+@media (max-width: 1230px) {
+  .workspace { grid-template-columns: 258px minmax(0, 1fr) 310px; gap: 10px; }
+  .app-shell { padding: 12px; gap: 10px; }
+  .sidebar { padding: 19px 14px; }
+}
+@media (max-width: 950px) {
+  .app-shell { height: auto; min-height: 100dvh; }
+  .workspace { grid-template-columns: minmax(0,1fr) minmax(0,1fr); grid-template-areas: "viewer viewer" "monitor controls"; align-items: start; }
+  .sidebar { overflow: visible; }
+  .viewer { height: min(55vh, 510px); min-height: 355px; }
+}
+@media (max-width: 610px) {
+  .workspace { grid-template-columns: minmax(0,1fr); grid-template-areas: "viewer" "monitor" "controls"; }
+  .app-header { padding: 0 2px; }
+  .brand-symbol { width: 34px; height: 34px; }
+  h1 { font-size: 14px; }
+  .brand p { font-size: 9px; }
+  .connection-chip { font-size: 10px; padding: 8px; }
+  .viewer { height: 360px; min-height: 360px; }
+  .sidebar { padding: 20px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; }
 }

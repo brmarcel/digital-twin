@@ -44,6 +44,7 @@ const state = createPlantState(value => {
 
 const connection = createMqtt({
   onMoisture: value => state.updateMoisture(value),
+  onWaterLevel: level => dashboard.showWaterLevel(level),
   onStatus: (message, connected) => dashboard.showStatus(message, connected),
   onConnectionChange: connected => dashboard.showConnected(connected),
   onPumpAvailability: availability => dashboard.showPumpAvailability(availability),
