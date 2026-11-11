@@ -7,8 +7,10 @@ import { createPlantPot } from './plantPot.js';
 import { createPlantState } from './data.js';
 import { createDashboard } from './dashboard.js';
 import { createMqtt } from './mqtt.js';
+import { setupTheme } from './theme.js';
 
-const { scene, frameModel } = createScene();
+const { scene, frameModel, setTheme: setSceneTheme } = createScene();
+setupTheme(setSceneTheme);
 let plantPot = null;
 let lastMoisture = null;
 

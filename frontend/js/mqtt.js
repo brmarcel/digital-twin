@@ -100,6 +100,7 @@ export function createMqtt({
     }
 
     disconnect(false);
+    onConnectionChange(false);
     onStatus('Verbinde …');
 
     const connection = mqtt.connect(`wss://${host}:${MQTT_PORT}/mqtt`, {

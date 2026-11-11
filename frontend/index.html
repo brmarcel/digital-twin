@@ -10,6 +10,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#111820">
   <title>Digitaler Blumentopf – Digital Twin</title>
+  <!-- Gespeicherten Modus vor dem CSS-Laden anwenden: kein kurzes Aufblitzen. -->
+  <script>
+    try {
+      document.documentElement.dataset.theme =
+        localStorage.getItem('plant-twin-theme') === 'light' ? 'light' : 'dark';
+    } catch {
+      document.documentElement.dataset.theme = 'dark';
+    }
+  </script>
   <link rel="stylesheet" href="./style.css">
   <script type="importmap">
   {
@@ -34,9 +43,52 @@
           <p>Digital Twin <span class="brand-separator">/</span> Monitoring & Steuerung</p>
         </div>
       </div>
-      <div class="connection-chip" role="status" aria-live="polite">
-        <span id="connection-indicator" class="indicator" aria-hidden="true"></span>
-        <span id="connection-label">Nicht verbunden</span>
+      <div class="header-actions">
+        <!-- Ein kompakter Umschalter für das gesamte Dashboard einschließlich 3D-Hintergrund. -->
+        <button id="theme-toggle" class="header-icon-button" type="button"
+                aria-label="Light Mode aktivieren" title="Light Mode aktivieren">
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14A8.5 8.5 0 0 1 10 3.5 8.5 8.5 0 1 0 20.5 14Z"/></svg>
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>
+        </button>
+
+        <!-- MQTT-Einstellungen bleiben unsichtbar, bis der Status geöffnet wird. -->
+        <div id="connection-menu" class="connection-menu">
+          <button id="connection-toggle" class="connection-chip" type="button"
+                  aria-controls="connection-panel" aria-expanded="false" aria-haspopup="true">
+            <span id="connection-indicator" class="indicator" aria-hidden="true"></span>
+            <span id="connection-label" role="status" aria-live="polite">Nicht verbunden</span>
+            <svg class="dropdown-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+
+          <section id="connection-panel" class="connection-popover" aria-labelledby="connection-popup-title" hidden>
+            <div class="popover-heading">
+              <div>
+                <div class="eyebrow">NETZWERK</div>
+                <h2 id="connection-popup-title">MQTT-Verbindung</h2>
+              </div>
+              <button id="connection-close" class="popover-close" type="button" aria-label="Schließen" title="Schließen">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <p id="connection-status" class="connection-details" role="status" aria-live="polite">Nicht verbunden</p>
+
+            <form id="login" class="login-form">
+              <label for="host">EMQX-Host</label>
+              <input id="host" placeholder="cluster.emqxsl.com" autocomplete="url" spellcheck="false" required>
+              <label for="username">Benutzername</label>
+              <input id="username" autocomplete="username" required>
+              <label for="password">Passwort</label>
+              <input id="password" type="password" autocomplete="off" required>
+              <button type="submit" class="full-width">Verbinden</button>
+            </form>
+            <div id="active-connection" class="connection-active" hidden>
+              <div class="connection-fact"><span>Broker</span><strong id="active-host">–</strong></div>
+              <div class="connection-fact"><span>Protokoll</span><strong>WSS · Port 8084</strong></div>
+            </div>
+            <button id="disconnect" type="button" class="secondary full-width" hidden>Verbindung trennen</button>
+            <p class="help-text">Zugangsdaten werden nicht im Browser gespeichert oder im Repository hinterlegt.</p>
+          </section>
+        </div>
       </div>
     </header>
 
@@ -79,9 +131,6 @@
           <div class="status-row"><span>ESP32</span><span id="pump-availability" class="pump-badge">Unbekannt</span></div>
           <div class="status-row"><span>Pumpe</span><strong id="pump-state">Unbekannt</strong></div>
           <div class="status-row"><span>Betriebsart</span><strong id="pump-current-mode">–</strong></div>
-          <div class="status-divider"></div>
-          <div class="section-kicker">MQTT-VERBINDUNG</div>
-          <p id="connection-status" class="connection-details" role="status">Nicht verbunden</p>
         </section>
         <p class="sidebar-footnote">Angezeigt werden ausschließlich empfangene Messwerte und bestätigte Gerätezustände.</p>
       </aside>
@@ -96,7 +145,7 @@
         </div>
       </section>
 
-      <!-- Rechts: alle Bedienfunktionen und MQTT-Einstellungen. -->
+      <!-- Rechts: ausschließlich Pumpensteuerung und Automatik-Konfiguration. -->
       <aside class="sidebar controls-sidebar" aria-labelledby="control-title">
         <div class="sidebar-heading">
           <div><div class="eyebrow">KONFIGURATION</div><h2 id="control-title">Steuerung</h2></div>
@@ -144,22 +193,7 @@
           <div id="pump-message" class="pump-message" role="status" aria-live="polite">Noch keine Pumpenbefehle gesendet.</div>
         </div>
 
-        <details id="connection-panel" class="connection-panel">
-          <summary>MQTT-Verbindung <span class="disclosure-note">Einstellungen</span></summary>
-          <div class="connection-content">
-            <form id="login" class="login-form">
-              <label for="host">EMQX-Host</label>
-              <input id="host" placeholder="cluster.emqxsl.com" autocomplete="url" required>
-              <label for="username">Benutzername</label>
-              <input id="username" autocomplete="username" required>
-              <label for="password">Passwort</label>
-              <input id="password" type="password" autocomplete="off" required>
-              <button type="submit" class="full-width">Verbinden</button>
-            </form>
-            <button id="disconnect" type="button" class="secondary full-width" hidden>Verbindung trennen</button>
-            <p class="help-text">Zugangsdaten nur im Browser eingeben, niemals im öffentlichen Repository hinterlegen.</p>
-          </div>
-        </details>
+
       </aside>
     </main>
   </div>

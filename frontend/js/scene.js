@@ -5,7 +5,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const BACKGROUND_COLOR = 0x171f29;
+const BACKGROUND_DARK = 0x171f29;
+const BACKGROUND_LIGHT = 0xeaf0f6;
 const GRID_SIZE = 10;
 const GRID_DIVISIONS = 20;
 const GRID_HEIGHT = -1.0;
@@ -14,12 +15,12 @@ const BOTTOM_LIGHT_INTENSITY = 1.0;
 /**
  * Erstellt die 3D-Szene und startet die Render-Schleife.
  *
- * @returns {{scene: THREE.Scene, frameModel: (size: THREE.Vector3) => void}}
+ * @returns {{scene: THREE.Scene, frameModel: (size: THREE.Vector3) => void, setTheme: (theme: string) => void}}
  *   Die Szene und eine Funktion zum Ausrichten der Kamera auf das Modell.
  */
 export function createScene() {
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(BACKGROUND_COLOR);
+  scene.background = new THREE.Color(BACKGROUND_DARK);
 
   const stage = document.getElementById('scene-stage');
   if (!stage) throw new Error('3D-Container #scene-stage fehlt.');
@@ -44,9 +45,22 @@ export function createScene() {
   bottomLight.position.set(0, -5, 0);
   scene.add(bottomLight);
 
-  const grid = new THREE.GridHelper(GRID_SIZE, GRID_DIVISIONS, 0x555555, 0x333333);
-  grid.position.y = GRID_HEIGHT;
-  scene.add(grid);
+  // Zwei dezente Raster mit passendem Kontrast, abhängig vom aktuellen Theme.
+  const gridDark = new THREE.GridHelper(GRID_SIZE, GRID_DIVISIONS, 0x555555, 0x333333);
+  const gridLight = new THREE.GridHelper(GRID_SIZE, GRID_DIVISIONS, 0xb1bdc9, 0xd5dfe8);
+  for (const grid of [gridDark, gridLight]) {
+    grid.position.y = GRID_HEIGHT;
+    scene.add(grid);
+  }
+
+  /** Ändert ausschließlich Hintergrund und Raster; Modellmaterialien bleiben unverändert. */
+  function setTheme(theme) {
+    const light = theme === 'light';
+    scene.background.set(light ? BACKGROUND_LIGHT : BACKGROUND_DARK);
+    gridDark.visible = !light;
+    gridLight.visible = light;
+  }
+  setTheme(document.documentElement.dataset.theme);
 
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
@@ -89,5 +103,5 @@ export function createScene() {
   }
 
   animate();
-  return { scene, frameModel };
+  return { scene, frameModel, setTheme };
 }

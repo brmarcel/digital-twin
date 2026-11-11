@@ -35,6 +35,11 @@ export function createDashboard({
   const connectionLabel = get('connection-label');
   const modelStatusElement = get('model-status');
   const connectionPanel = get('connection-panel');
+  const connectionMenu = get('connection-menu');
+  const connectionToggle = get('connection-toggle');
+  const connectionClose = get('connection-close');
+  const activeConnection = get('active-connection');
+  const activeHost = get('active-host');
   const loginForm = get('login');
   const disconnectButton = get('disconnect');
   const passwordInput = get('password');
@@ -63,6 +68,30 @@ export function createDashboard({
   let expectedConfig = null;
   let lastWaterReceivedAt = null;
   let lastMoistureReceivedAt = null;
+  let lastSubmittedHost = '';
+
+  /** Öffnet/schließt das kleine Header-Panel, ohne Verbindungen zu verändern. */
+  function setConnectionPanelOpen(open, restoreFocus = false) {
+    connectionPanel.hidden = !open;
+    connectionToggle.setAttribute('aria-expanded', String(open));
+    connectionToggle.classList.toggle('open', open);
+    if (restoreFocus) connectionToggle.focus();
+  }
+
+  connectionToggle.addEventListener('click', () => {
+    setConnectionPanelOpen(connectionPanel.hidden);
+  });
+  connectionClose.addEventListener('click', () => setConnectionPanelOpen(false, true));
+  document.addEventListener('pointerdown', event => {
+    if (!connectionPanel.hidden && !connectionMenu.contains(event.target)) {
+      setConnectionPanelOpen(false);
+    }
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && !connectionPanel.hidden) {
+      setConnectionPanelOpen(false, true);
+    }
+  });
 
   /** Stellt fehlende/veraltete Feuchtewerte ausdrücklich als unbekannt dar. */
   function resetMoisture(reason = 'waiting') {
@@ -159,8 +188,9 @@ export function createDashboard({
 
   loginForm.addEventListener('submit', event => {
     event.preventDefault();
+    lastSubmittedHost = get('host').value.trim();
     onConnect({
-      host: get('host').value.trim(),
+      host: lastSubmittedHost,
       username: get('username').value,
       password: passwordInput.value
     });
@@ -190,7 +220,8 @@ export function createDashboard({
   });
 
   applyConfig(DEFAULT_PUMP_CONFIG);
-  connectionPanel.open = true; // Beim ersten Besuch sind keine Zugangsdaten vorhanden.
+  // Keine Unterbrechung beim Laden. Bei Bedarf per Statusbutton öffnen.
+  setConnectionPanelOpen(false);
   updateControls();
 
   return {
@@ -243,8 +274,13 @@ export function createDashboard({
      */
     showStatus(message, connected = false) {
       statusElement.textContent = message;
-      indicatorElement.classList.toggle('connected', connected);
-      connectionLabel.textContent = connected ? 'MQTT verbunden' : 'Nicht verbunden';
+      const connecting = !connected && /verbinde|wiederhergestellt|erneuter versuch/i.test(message);
+      const error = /fehler|fehlgeschlagen|ungültig/i.test(message);
+      indicatorElement.classList.toggle('connected', connected && !error);
+      indicatorElement.classList.toggle('connecting', connecting && !error);
+      indicatorElement.classList.toggle('error', error);
+      connectionLabel.textContent = error ? 'MQTT-Fehler' :
+        connected ? 'Verbunden' : connecting ? 'Verbinde …' : 'Nicht verbunden';
     },
 
     /** @param {string} message - Meldung zum 3D-Modell. */
@@ -256,9 +292,15 @@ export function createDashboard({
     showConnected(connected) {
       mqttConnected = connected;
       loginForm.hidden = connected;
+      activeConnection.hidden = !connected;
+      activeHost.textContent = connected ? lastSubmittedHost || 'Verbunden' : '–';
       disconnectButton.hidden = !connected;
-      connectionPanel.open = !connected;
-      if (!connected) passwordInput.value = '';
+      if (connected) {
+        passwordInput.value = '';
+        setConnectionPanelOpen(false);
+      }
+      // Bei Verbindungsabbruch geöffnetes Panel nicht automatisch schließen.
+
       resetMoisture(connected ? 'waiting' : 'offline');
       resetWater(connected ? 'waiting' : 'offline');
       updateControls();
