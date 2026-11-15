@@ -1,6 +1,6 @@
 /**
  * @file main.js
- * Startet 3D-Szene, Feuchtemodell, Dashboard und bidirektionale MQTT-Steuerung.
+ * Startet 3D-Szene, Feuchtemodell, Dashboard, Historie und bidirektionale MQTT-Steuerung.
  */
 import { createScene } from './scene.js';
 import { createPlantPot } from './plantPot.js';
@@ -8,11 +8,53 @@ import { createPlantState } from './data.js';
 import { createDashboard } from './dashboard.js';
 import { createMqtt } from './mqtt.js';
 import { setupTheme } from './theme.js';
+import { createHistoryStore } from './history.js';
 
 const { scene, frameModel, setTheme: setSceneTheme } = createScene();
 setupTheme(setSceneTheme);
 let plantPot = null;
 let lastMoisture = null;
+
+const history = createHistoryStore();
+let moistureHistory = [];
+
+/** Zeichnet die gespeicherten Feuchtigkeitswerte als SVG-Linie. */
+function renderHistoryChart() {
+  const line = document.getElementById('history-line-moisture');
+  const status = document.getElementById('history-status');
+  if (!line || !status) return;
+
+  if (moistureHistory.length < 2) {
+    line.setAttribute('points', '');
+    status.textContent = history.isConfigured
+      ? 'Noch zu wenige Datenpunkte für Verlauf'
+      : 'Supabase in js/history.js konfigurieren';
+    return;
+  }
+
+  const width = 260;
+  const height = 90;
+  const minTime = new Date(moistureHistory[0].created_at).getTime();
+  const maxTime = new Date(moistureHistory.at(-1).created_at).getTime();
+  const timeSpan = Math.max(1, maxTime - minTime);
+
+  const points = moistureHistory.map(entry => {
+    const t = new Date(entry.created_at).getTime();
+    const x = ((t - minTime) / timeSpan) * width;
+    const clampedVal = Math.max(0, Math.min(100, entry.value));
+    const y = height - (clampedVal / 100) * height;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+
+  line.setAttribute('points', points);
+  status.textContent = `${moistureHistory.length} Messpunkte geladen`;
+}
+
+// Beim Start bestehende Historie aus Supabase abrufen
+history.loadRecentReadings(24).then(data => {
+  moistureHistory = data.moisture;
+  renderHistoryChart();
+});
 
 /**
  * Überträgt einen Pumpenbefehl und unterscheidet Broker-Empfang von ESP32-Bestätigung.
@@ -45,8 +87,18 @@ const state = createPlantState(value => {
 });
 
 const connection = createMqtt({
-  onMoisture: value => state.updateMoisture(value),
-  onWaterLevel: level => dashboard.showWaterLevel(level),
+  onMoisture: value => {
+    state.updateMoisture(value);
+    history.saveReading('moisture', value);
+    moistureHistory.push({ created_at: new Date().toISOString(), value });
+    renderHistoryChart();
+  },
+  onWaterLevel: level => {
+    dashboard.showWaterLevel(level);
+    if (level?.valid) {
+      history.saveReading('water_level', level.volumeMl);
+    }
+  },
   onStatus: (message, connected) => dashboard.showStatus(message, connected),
   onConnectionChange: connected => dashboard.showConnected(connected),
   onPumpAvailability: availability => dashboard.showPumpAvailability(availability),
