@@ -25,7 +25,8 @@
     "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
       "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
-      "mqtt": "https://esm.sh/mqtt@5.10.1?bundle"
+      "mqtt": "https://esm.sh/mqtt@5.10.1?bundle",
+      "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2"
     }
   }
   </script>
@@ -111,7 +112,7 @@
           </div>
           <div id="moisture-state" class="metric-detail">Warte auf Messwerte</div>
         </section>
-
+             
         <section class="metric-card water-card" aria-labelledby="water-title">
           <div class="metric-heading">
             <span class="metric-icon water-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8c2 0 2 2 4 2s2-2 4-2 2 2 4 2 2-2 4-2M4 14c2 0 2 2 4 2s2-2 4-2 2 2 4 2 2-2 4-2"/></svg></span>
@@ -124,7 +125,18 @@
           <div class="water-volume" id="water-volume">– / 1.800 ml</div>
           <div id="water-state" class="metric-detail" role="status">Warte auf Messwerte</div>
         </section>
-
+        
+        <section class="metric-card history-card" aria-labelledby="history-title">
+          <div class="metric-heading">
+            <h3 id="history-title">Verlauf (24 Std.)</h3>
+          </div>
+          <div class="history-chart-wrap">
+            <svg id="history-chart" viewBox="0 0 260 90" preserveAspectRatio="none" aria-label="Verlaufsdiagramm Bodenfeuchtigkeit">
+              <polyline id="history-line-moisture" fill="none" stroke="var(--green)" stroke-width="2" points="" />
+            </svg>
+          </div>
+          <div id="history-status" class="metric-detail">Lade Historie …</div>
+        </section>
         <section class="status-card" aria-labelledby="status-title">
           <div class="section-kicker">GERÄTESTATUS</div>
           <h3 id="status-title">System</h3>
