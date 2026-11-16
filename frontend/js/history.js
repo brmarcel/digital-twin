@@ -5,15 +5,15 @@
 import { createClient } from '@supabase/supabase-js';
 
 // HIER DEINE WERTE AUS SUPABASE EINFÜGEN:
-const SUPABASE_URL = 'https://lnvqvdixfjxhazacxcxk.supabase.co/rest/v1/';
-const SUPABASE_ANON_KEY = 'sb_publishable_tkv9VpTyWRaPnyY4ei3lgQ_pHN4Wp09';
+const SUPABASE_URL = 'https://DEIN-PROJEKT.supabase.co';
+const SUPABASE_ANON_KEY = 'DEIN-ANON-PUBLIC-KEY';
 
 const DEVICE_ID = 'plantpot/01';
 const MIN_SAVE_INTERVAL_MS = 30_000; // Maximal alle 30 Sek. pro Messgröße speichern
 
 export function createHistoryStore() {
   const isConfigured =
-    SUPABASE_URL.startsWith('https://') && !SUPABASE_URL.includes('lnvqvdixfjxhazacxcxk');
+    SUPABASE_URL.startsWith('https://') && !SUPABASE_URL.includes('DEIN-PROJEKT');
 
   const supabase = isConfigured
     ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
