@@ -11,8 +11,11 @@ const SUPABASE_URL = 'https://lnvqvdixfjxhazacxcxk.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_tkv9VpTyWRaPnyY4ei3lgQ_pHN4Wp09';
 
 const DEVICE_ID = 'plantpot/01';
-const MIN_SAVE_INTERVAL_MS = 30_000;
-
+const MIN_SAVE_INTERVAL_MS = 5 * 60 * 1000; // Regulär alle 5 Minuten speichern
+const CHANGE_THRESHOLD = {
+  moisture: 2,     // Sofort speichern bei >= 2 % Änderung
+  water_level: 25  // Sofort speichern bei >= 25 ml Änderung
+};
 export function createHistoryStore() {
   const isConfigured =
     SUPABASE_URL.startsWith('https://') && !SUPABASE_URL.includes('DEIN-PROJEKT');
@@ -26,8 +29,14 @@ export function createHistoryStore() {
     water_level: 0
   };
 
+ const lastSaved = {
+    moisture: { time: 0, value: null },
+    water_level: { time: 0, value: null }
+  };
+
   /**
-   * Speichert einen Sensorwert gedrosselt in Supabase.
+   * Speichert einen Sensorwert alle 10 Minuten – oder sofort, wenn sich der Wert
+   * spürbar geändert hat (z. B. während einer Bewässerung).
    * @param {'moisture'|'water_level'} metric
    * @param {number} value
    */
@@ -35,8 +44,14 @@ export function createHistoryStore() {
     if (!supabase || typeof value !== 'number' || !Number.isFinite(value)) return;
 
     const now = Date.now();
-    if (now - lastSavedAt[metric] < MIN_SAVE_INTERVAL_MS) return;
-    lastSavedAt[metric] = now;
+    const prev = lastSaved[metric];
+    const timeElapsed = now - prev.time >= MIN_SAVE_INTERVAL_MS;
+    const significantChange =
+      prev.value === null || Math.abs(value - prev.value) >= CHANGE_THRESHOLD[metric];
+
+    if (!timeElapsed && !significantChange) return;
+
+    lastSaved[metric] = { time: now, value };
 
     const { error } = await supabase
       .from('sensor_readings')
@@ -85,6 +100,8 @@ export function createHistoryStore() {
   /**
    * Lädt Sensorwerte (Bodenfeuchte & Wasserstand) sowie Bewässerungsereignisse
    * für den gewählten Zeitraum in Stunden.
+   * Nutzt bei Zeiträumen über 48 Stunden die Datenbank-Aggregation, damit auch
+   * 30 Tage und 6 Monate ohne Zeilen-Limit vollständig dargestellt werden.
    * @param {number} [hours=24]
    */
   async function loadHistory(hours = 24) {
@@ -94,22 +111,30 @@ export function createHistoryStore() {
 
     const since = new Date(Date.now() - hours * 3600 * 1000).toISOString();
 
-    const [readingsRes, eventsRes] = await Promise.all([
-      supabase
-        .from('sensor_readings')
-        .select('created_at, metric, value')
-        .eq('device_id', DEVICE_ID)
-        .gte('created_at', since)
-        .order('created_at', { ascending: true })
-        .limit(10000),
-      supabase
-        .from('watering_events')
-        .select('id, started_at, mode, duration_ms')
-        .eq('device_id', DEVICE_ID)
-        .gte('started_at', since)
-        .order('started_at', { ascending: false })
-        .limit(500)
-    ]);
+    const readingsPromise =
+      hours <= 48
+        ? supabase
+            .from('sensor_readings')
+            .select('created_at, metric, value')
+            .eq('device_id', DEVICE_ID)
+            .gte('created_at', since)
+            .order('created_at', { ascending: true })
+            .limit(2000)
+        : supabase.rpc('get_aggregated_readings', {
+            p_device_id: DEVICE_ID,
+            p_hours: hours,
+            p_buckets: 240
+          });
+
+    const eventsPromise = supabase
+      .from('watering_events')
+      .select('id, started_at, mode, duration_ms')
+      .eq('device_id', DEVICE_ID)
+      .gte('started_at', since)
+      .order('started_at', { ascending: false })
+      .limit(1000);
+
+    const [readingsRes, eventsRes] = await Promise.all([readingsPromise, eventsPromise]);
 
     if (readingsRes.error) {
       console.warn('Sensorhistorie Fehler:', readingsRes.error.message);
@@ -119,19 +144,18 @@ export function createHistoryStore() {
     }
 
     const rows = readingsRes.data ?? [];
-    const moistureRaw = rows.filter(r => r.metric === 'moisture');
-    const waterRaw = rows.filter(r => r.metric === 'water_level').map(r => ({
-      created_at: r.created_at,
-      volumeMl: r.value,
-      value: Math.max(0, Math.min(100, (r.value / WATER_CAPACITY_ML) * 100))
-    }));
+    const moisture = rows.filter(r => r.metric === 'moisture');
+    const waterLevel = rows
+      .filter(r => r.metric === 'water_level')
+      .map(r => ({
+        created_at: r.created_at,
+        volumeMl: r.value,
+        value: Math.max(0, Math.min(100, (r.value / WATER_CAPACITY_ML) * 100))
+      }));
 
     return {
-      moisture: downsample(moistureRaw),
-      waterLevel: downsample(waterRaw),
+      moisture,
+      waterLevel,
       wateringEvents: eventsRes.data ?? []
     };
   }
-
-  return { isConfigured, saveReading, saveWateringEvent, loadHistory };
-}
