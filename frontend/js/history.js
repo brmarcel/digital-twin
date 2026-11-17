@@ -7,7 +7,7 @@ import { createClient } from '@supabase/supabase-js';
 import { WATER_CAPACITY_ML } from './waterLevel.js';
 
 // HIER DEINE WERTE AUS SUPABASE EINFÜGEN:
-const SUPABASE_URL = 'https://lnvqvdixfjxhazacxcxk.supabase.co/rest/v1/';
+const SUPABASE_URL = 'https://lnvqvdixfjxhazacxcxk.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_tkv9VpTyWRaPnyY4ei3lgQ_pHN4Wp09';
 
 const DEVICE_ID = 'plantpot/01';
