@@ -7,7 +7,8 @@ import { createClient } from '@supabase/supabase-js';
 import { WATER_CAPACITY_ML } from './waterLevel.js';
 
 // HIER DEINE WERTE AUS SUPABASE EINFÜGEN:
-const SUPABASE_URL = 'https://lnvqvdixfjxhazacxcxk.supabase.co';
+const RAW_SUPABASE_URL = 'https://lnvqvdixfjxhazacxcxk.supabase.co';
+const SUPABASE_URL = RAW_SUPABASE_URL.trim().replace(/\/(rest\/v1)?\/?$/, '');
 const SUPABASE_ANON_KEY = 'sb_publishable_tkv9VpTyWRaPnyY4ei3lgQ_pHN4Wp09';
 
 const DEVICE_ID = 'plantpot/01';
@@ -16,6 +17,7 @@ const CHANGE_THRESHOLD = {
   moisture: 2,     // Sofort speichern bei >= 2 % Änderung
   water_level: 25  // Sofort speichern bei >= 25 ml Änderung
 };
+
 export function createHistoryStore() {
   const isConfigured =
     SUPABASE_URL.startsWith('https://') && !SUPABASE_URL.includes('DEIN-PROJEKT');
@@ -24,18 +26,13 @@ export function createHistoryStore() {
     ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
     : null;
 
-  const lastSavedAt = {
-    moisture: 0,
-    water_level: 0
-  };
-
- const lastSaved = {
+  const lastSaved = {
     moisture: { time: 0, value: null },
     water_level: { time: 0, value: null }
   };
 
   /**
-   * Speichert einen Sensorwert alle 10 Minuten – oder sofort, wenn sich der Wert
+   * Speichert einen Sensorwert alle 5 Minuten – oder sofort, wenn sich der Wert
    * spürbar geändert hat (z. B. während einer Bewässerung).
    * @param {'moisture'|'water_level'} metric
    * @param {number} value
@@ -84,24 +81,8 @@ export function createHistoryStore() {
   }
 
   /**
-   * Verdichtet große Messreihen gleichmäßig auf maxPoints Punkte für flüssige Darstellung.
-   */
-  function downsample(rows, maxPoints = 240) {
-    if (rows.length <= maxPoints) return rows;
-    const step = rows.length / maxPoints;
-    const sampled = [];
-    for (let i = 0; i < maxPoints; i++) {
-      sampled.push(rows[Math.floor(i * step)]);
-    }
-    if (sampled.at(-1) !== rows.at(-1)) sampled.push(rows.at(-1));
-    return sampled;
-  }
-
-  /**
    * Lädt Sensorwerte (Bodenfeuchte & Wasserstand) sowie Bewässerungsereignisse
    * für den gewählten Zeitraum in Stunden.
-   * Nutzt bei Zeiträumen über 48 Stunden die Datenbank-Aggregation, damit auch
-   * 30 Tage und 6 Monate ohne Zeilen-Limit vollständig dargestellt werden.
    * @param {number} [hours=24]
    */
   async function loadHistory(hours = 24) {
@@ -159,3 +140,6 @@ export function createHistoryStore() {
       wateringEvents: eventsRes.data ?? []
     };
   }
+
+  return { isConfigured, saveReading, saveWateringEvent, loadHistory };
+}
