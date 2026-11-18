@@ -55,6 +55,29 @@
         </div>
       </div>
       <div class="header-actions">
+        <!-- Warnungen aus empfangenen MQTT-Messwerten, ohne Browser-Push in diesem Schritt. -->
+        <div id="notification-menu" class="notification-menu">
+          <button id="notification-toggle" class="header-icon-button notification-toggle" type="button"
+                  aria-label="Benachrichtigungen öffnen" title="Benachrichtigungen"
+                  aria-controls="notification-panel" aria-expanded="false" aria-haspopup="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>
+            <span id="notification-badge" class="notification-badge" aria-hidden="true" hidden>0</span>
+          </button>
+          <section id="notification-panel" class="notification-panel" aria-labelledby="notification-panel-title" hidden>
+            <div class="notification-panel-header">
+              <div><div class="eyebrow">EREIGNISSE</div><h2 id="notification-panel-title">Benachrichtigungen</h2></div>
+              <button id="notification-close" class="popover-close" type="button" aria-label="Benachrichtigungen schließen" title="Schließen">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <p class="notification-explainer">Warnungen werden bei geöffneter App aus MQTT-Messwerten erzeugt.</p>
+            <ul id="notification-list" class="notification-list" aria-label="Letzte Benachrichtigungen"></ul>
+            <div class="notification-panel-actions">
+              <button id="notification-test" class="secondary" type="button">Testwarnung</button>
+              <button id="notification-mark-read" class="secondary" type="button">Alle gelesen</button>
+            </div>
+          </section>
+        </div>
         <!-- Ein kompakter Umschalter für das gesamte Dashboard einschließlich 3D-Hintergrund. -->
         <button id="theme-toggle" class="header-icon-button" type="button"
                 aria-label="Light Mode aktivieren" title="Light Mode aktivieren">
@@ -102,6 +125,13 @@
         </div>
       </div>
     </header>
+
+    <!-- Sichtbare Wasserstandswarnung (bei neuen, gültigen MQTT-Messwerten). -->
+    <div id="water-alert-banner" class="water-alert-banner" role="status" aria-live="polite" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 18H2L12 3ZM12 9v5m0 3h.01"/></svg>
+      <span id="water-alert-message"></span>
+    </div>
+    <div id="notification-toast" class="notification-toast" role="status" aria-live="polite" hidden></div>
 
     <main class="workspace">
       <!-- Links: ausschließlich Messwerte und Geräte-Istzustände. -->
