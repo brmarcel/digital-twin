@@ -78,40 +78,22 @@ export function createNotifications() {
     }
   }
 
-  function deleteOne(id) {
-    const index = state.messages.findIndex(m => m.id === id);
-    if (index !== -1) {
-      state.messages.splice(index, 1);
-      persist();
-      renderList();
-    }
-  }
-
   function markAllRead() {
     state.messages.forEach(item => { item.read = true; });
     persist();
     renderList();
   }
 
-  function deleteAllRead() {
-    state.messages = state.messages.filter(item => !item.read);
+  function deleteAllEvents() {
+    // Nur den sichtbaren Ereignisverlauf löschen, nicht den aktiven Alarmzustand.
+    state.messages = [];
     persist();
     renderList();
-  }
-
-  function makeButton(label, className, callback) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = `secondary ${className}`;
-    button.textContent = label;
-    button.addEventListener('click', callback);
-    return button;
   }
 
   function renderList() {
     list.replaceChildren();
     const unread = state.messages.filter(item => !item.read).length;
-    const read = state.messages.length - unread;
     badge.hidden = unread === 0;
     badge.textContent = unread > 9 ? '9+' : String(unread);
     toggle.setAttribute('aria-label', unread
@@ -127,6 +109,12 @@ export function createNotifications() {
         const li = document.createElement('li');
         li.className = 'notification-item' + (item.read ? '' : ' unread') +
           (item.kind === 'empty' ? ' is-urgent' : '');
+        const eventButton = document.createElement('button');
+        eventButton.type = 'button';
+        eventButton.className = 'notification-item-content';
+        eventButton.setAttribute('aria-label', item.read
+          ? `${item.title}: gelesen` : `${item.title}: als gelesen markieren`);
+        eventButton.addEventListener('click', () => markOneRead(item.id));
         const head = document.createElement('div');
         head.className = 'notification-item-head';
         const title = document.createElement('strong');
@@ -146,22 +134,13 @@ export function createNotifications() {
         when.textContent = new Date(item.createdAt).toLocaleString('de-DE', {
           day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
         });
-        const actions = document.createElement('div');
-        actions.className = 'notification-item-actions';
-        if (!item.read) {
-          const readButton = makeButton('Als gelesen', 'notification-mark-one', () => markOneRead(item.id));
-          readButton.setAttribute('aria-label', `${item.title}: als gelesen markieren`);
-          actions.append(readButton);
-        }
-        const deleteButton = makeButton('Löschen', 'notification-delete', () => deleteOne(item.id));
-        deleteButton.setAttribute('aria-label', `${item.title}: Benachrichtigung löschen`);
-        actions.append(deleteButton);
-        li.append(head, content, when, actions);
+        eventButton.append(head, content, when);
+        li.append(eventButton);
         list.append(li);
       });
     }
     markRead.disabled = unread === 0;
-    deleteRead.disabled = read === 0;
+    deleteRead.disabled = state.messages.length === 0;
   }
 
   function showToast(title, message, kind) {
@@ -263,7 +242,7 @@ export function createNotifications() {
   toggle?.addEventListener('click', () => setOpen(panel.hidden));
   close?.addEventListener('click', () => setOpen(false));
   markRead?.addEventListener('click', markAllRead);
-  deleteRead?.addEventListener('click', deleteAllRead);
+  deleteRead?.addEventListener('click', deleteAllEvents);
   document.addEventListener('pointerdown', event => {
     if (!panel.hidden && !menu.contains(event.target)) setOpen(false);
   });
