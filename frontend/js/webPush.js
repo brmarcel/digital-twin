@@ -1,5 +1,5 @@
 /**
- * Web Push auf diesem Gerät aktivieren/testen/deaktivieren.
+ * Web Push auf diesem Gerät ohne Passwort aktivieren/testen/deaktivieren.
  * KEINE Änderung am MQTT-Lesepfad; Freigabe nur per bewusstem Klick.
  */
 const DEVICE_TOKEN_KEY = 'plant-twin-push-device-token-v1';
@@ -35,20 +35,18 @@ export async function initWebPush(registration) {
   const enable = document.getElementById('push-enable');
   const test = document.getElementById('push-test');
   const disable = document.getElementById('push-disable');
-  const code = document.getElementById('push-pairing-code');
-  const codeRow = document.getElementById('push-pairing-row');
+  const diagnostics = document.getElementById('push-diagnostics');
   const status = document.getElementById('push-status');
-  if (!enable || !test || !disable || !code || !status) return;
+  if (!enable || !test || !disable || !status) return;
 
   let publicKey = null;
   let busy = false;
   const supported = window.isSecureContext && 'Notification' in window && Boolean(registration?.pushManager);
   function message(text) { status.textContent = text; }
   function buttons(active) {
-    codeRow.hidden = active;
     enable.hidden = active;
-    test.hidden = !active;
     disable.hidden = !active;
+    if (diagnostics) diagnostics.hidden = !active;
     enable.disabled = busy; test.disabled = busy; disable.disabled = busy;
   }
   async function refresh(note = null) {
@@ -57,7 +55,7 @@ export async function initWebPush(registration) {
     buttons(active);
     if (note) message(note);
     else if (active) message('Push ist auf diesem Gerät aktiviert.');
-    else if (subscription) message('Abonnement vorhanden. Bitte mit Einrichtungscode erneut anmelden.');
+    else if (subscription) message('Abonnement vorhanden. Mit „Push aktivieren“ erneut registrieren.');
     else message('Push ist auf diesem Gerät noch nicht aktiviert.');
   }
   if (!supported) {
@@ -84,8 +82,6 @@ export async function initWebPush(registration) {
 
   enable.addEventListener('click', async () => {
     if (busy) return;
-    const pairing = code.value.trim();
-    if (!pairing) { message('Bitte zuerst den Einrichtungscode eingeben.'); code.focus(); return; }
     // iOS verlangt die Berechtigungsabfrage unmittelbar nach einer Benutzeraktion.
     busy = true; buttons(false);
     let resultMessage = null;
@@ -98,11 +94,9 @@ export async function initWebPush(registration) {
           userVisibleOnly: true, applicationServerKey: keyBytes(publicKey)
         });
       }
-      const result = await api('subscribe', { subscription: subscription.toJSON() },
-        { 'X-Push-Pairing': pairing });
+      const result = await api('subscribe', { subscription: subscription.toJSON() });
       saveToken(result.deviceToken);
-      code.value = '';
-      resultMessage = 'Push erfolgreich aktiviert! Teste jetzt eine Benachrichtigung.';
+      resultMessage = 'Push auf diesem Gerät erfolgreich aktiviert.';
     } catch (error) {
       resultMessage = `Aktivierung fehlgeschlagen: ${error.message}`;
     } finally { busy = false; await refresh(resultMessage); }

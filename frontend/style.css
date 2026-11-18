@@ -511,14 +511,20 @@ button.danger { color: var(--button-danger-text); background: var(--button-dange
 .notification-panel-header h2 { font-size: 15px; margin: 6px 0 0; }
 .notification-explainer { color: var(--muted); font-size: 11px; line-height: 1.5; margin: 12px 0; }
 .notification-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; max-height: 290px; overflow: auto; }
-.notification-item { display: grid; gap: 4px; padding: 11px; border-radius: 9px; background: var(--card); border: 1px solid var(--border); }
+.notification-item { display: grid; gap: 5px; padding: 11px; border-radius: 9px; background: var(--card); border: 1px solid var(--border); }
+.notification-item-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.notification-item-head strong { flex: 1; min-width: 0; }
+.notification-unread-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--amber); flex: 0 0 auto; }
+.notification-item-actions { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; margin-top: 3px; }
+.notification-item-actions button { font-size: 10px; padding: 5px 8px; }
+.notification-item-actions .notification-delete { margin-left: auto; }
 .notification-item.unread { border-left: 3px solid var(--amber); }
 .notification-item.is-urgent { border-left-color: var(--red); }
 .notification-item strong { font-size: 12px; color: var(--text); }
 .notification-item p { font-size: 11px; line-height: 1.5; color: var(--muted); margin: 0; }
 .notification-item time { color: var(--faint); font-size: 10px; }
 .notification-empty { text-align: center; font-size: 11px; padding: 18px 8px; color: var(--muted); }
-.notification-panel-actions { display: flex; justify-content: space-between; gap: 8px; margin-top: 12px; }
+.notification-panel-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .notification-panel-actions button { font-size: 11px; padding: 7px 10px; }
 .water-alert-banner {
   display: flex; align-items: center; gap: 10px; flex: 0 0 auto;
@@ -551,9 +557,13 @@ button.danger { color: var(--button-danger-text); background: var(--button-dange
 .push-settings h3 { font-size: 13px; margin: 0 0 6px; color: var(--text); }
 .push-settings p, .push-settings small { display: block; font-size: 11px; line-height: 1.55; color: var(--muted); }
 .push-settings p { margin: 0 0 10px; }
-.push-pairing-row { display: grid; gap: 6px; margin-bottom: 9px; }
-.push-pairing-row label { font-size: 11px; color: var(--muted); }
-.push-pairing-row input { width: 100%; min-width: 0; box-sizing: border-box; font-size: 12px; }
 .push-settings-buttons { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-bottom: 8px; }
 .push-settings-buttons button { font-size: 11px; padding: 8px 10px; }
 .push-settings small { font-size: 10px; }
+
+/* Optionaler Diagnosebereich: im Alltag zugeklappt. */
+.push-diagnostics { margin-top: 9px; }
+.push-diagnostics summary { cursor: pointer; color: var(--muted); font-size: 11px; }
+.push-diagnostics button { margin-top: 9px; font-size: 11px; }
+/* Bei author-spezifischem display:grid das hidden-Attribut respektieren. */
+.notification-badge[hidden] { display: none; }

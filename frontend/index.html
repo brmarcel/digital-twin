@@ -55,7 +55,7 @@
         </div>
       </div>
       <div class="header-actions">
-        <!-- Warnungen aus empfangenen MQTT-Messwerten, ohne Browser-Push in diesem Schritt. -->
+        <!-- Lokale Ereignisliste und gerätebezogene Web-Push-Einstellungen. -->
         <div id="notification-menu" class="notification-menu">
           <button id="notification-toggle" class="header-icon-button notification-toggle" type="button"
                   aria-label="Benachrichtigungen öffnen" title="Benachrichtigungen"
@@ -73,23 +73,21 @@
             <p class="notification-explainer">Die Liste zeigt Warnungen aus MQTT bei geöffneter App. System-Push funktioniert zusätzlich bei geschlossener App.</p>
             <ul id="notification-list" class="notification-list" aria-label="Letzte Benachrichtigungen"></ul>
             <div class="notification-panel-actions">
-              <button id="notification-test" class="secondary" type="button">Testwarnung</button>
               <button id="notification-mark-read" class="secondary" type="button">Alle gelesen</button>
+              <button id="notification-delete-read" class="secondary" type="button">Gelesene löschen</button>
             </div>
             <section class="push-settings" aria-labelledby="push-title">
               <h3 id="push-title">Push auf diesem Gerät</h3>
               <p id="push-status" role="status" aria-live="polite">Push-Status wird geprüft …</p>
-              <div id="push-pairing-row" class="push-pairing-row">
-                <label for="push-pairing-code">Einrichtungscode (aus Vercel)</label>
-                <input id="push-pairing-code" type="password" autocomplete="off"
-                       placeholder="Einrichtungscode eingeben" spellcheck="false">
-              </div>
               <div class="push-settings-buttons">
                 <button id="push-enable" type="button">Push aktivieren</button>
-                <button id="push-test" type="button" class="secondary" hidden>Push testen</button>
                 <button id="push-disable" type="button" class="secondary" hidden>Deaktivieren</button>
               </div>
-              <small>Push wird separat pro Smartphone/Computer aktiviert. Die Testwarnung oben bleibt lokal.</small>
+              <small>Push wird einmal pro Gerät aktiviert. Der Einrichtungscode wird nicht mehr benötigt.</small>
+              <details id="push-diagnostics" class="push-diagnostics" hidden>
+                <summary>Diagnose</summary>
+                <button id="push-test" type="button" class="secondary">Test-Push an dieses Gerät senden</button>
+              </details>
             </section>
           </section>
         </div>

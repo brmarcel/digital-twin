@@ -1,9 +1,9 @@
 /**
- * notifications.js – Lokale Dashboard-Warnungen (Schritt 2).
- * Rein lesende Auswertung der bereits validierten MQTT-Wasserstandsmesswerte.
- * KEIN MQTT-Publish, KEINE Pumpensteuerung, KEINE OS-/Web-Push-Nachrichten.
+ * notifications.js – Lokale Ereignisliste mit Lesen und Löschen.
+ * Nutzt ausschließlich die bereits validierten MQTT-Wasserstandsmesswerte.
+ * Keine MQTT-Publishs, keine Pumpenbefehle und keine System-Pushes.
  */
-const STORE_KEY = 'plant-twin-notifications-v1';
+const STORE_KEY = 'plant-twin-notifications-v1'; // Vorhandenen Verlauf weiterverwenden.
 export const WATER_WARNING_THRESHOLD_PERCENT = 15;
 export const WATER_EMPTY_THRESHOLD_PERCENT = 5;
 export const WATER_RESET_THRESHOLD_PERCENT = 20;
@@ -13,18 +13,29 @@ const MAX_MESSAGES = 30;
 function restore() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
-    const messages = Array.isArray(saved.messages) ? saved.messages : [];
+    const raw = Array.isArray(saved.messages) ? saved.messages : [];
+    const messages = raw.filter(item =>
+      item && typeof item.title === 'string' && typeof item.message === 'string' &&
+      Number.isFinite(item.createdAt) && typeof item.read === 'boolean' &&
+      item.kind !== 'test' // Frühere Demo-Testmeldungen nicht mehr anzeigen.
+    ).slice(0, MAX_MESSAGES).map((item, index) => ({
+      ...item,
+      // Alte gespeicherte Meldungen hatten noch keine IDs.
+      id: typeof item.id === 'string' && item.id ? item.id : `legacy-${item.createdAt}-${index}`
+    }));
     return {
-      messages: messages.filter(item =>
-        item && typeof item.title === 'string' && typeof item.message === 'string' &&
-        typeof item.createdAt === 'number' && typeof item.read === 'boolean'
-      ).slice(0, MAX_MESSAGES),
+      messages,
       notifiedCritical: saved.notifiedCritical === true,
       notifiedEmpty: saved.notifiedEmpty === true
     };
   } catch {
     return { messages: [], notifiedCritical: false, notifiedEmpty: false };
   }
+}
+
+function newId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 export function createNotifications() {
@@ -34,8 +45,8 @@ export function createNotifications() {
   const close = document.getElementById('notification-close');
   const badge = document.getElementById('notification-badge');
   const list = document.getElementById('notification-list');
-  const test = document.getElementById('notification-test');
   const markRead = document.getElementById('notification-mark-read');
+  const deleteRead = document.getElementById('notification-delete-read');
   const banner = document.getElementById('water-alert-banner');
   const bannerMessage = document.getElementById('water-alert-message');
   const toast = document.getElementById('notification-toast');
@@ -58,15 +69,49 @@ export function createNotifications() {
     toggle.classList.toggle('open', open);
   }
 
+  function markOneRead(id) {
+    const item = state.messages.find(m => m.id === id);
+    if (item && !item.read) {
+      item.read = true;
+      persist();
+      renderList();
+    }
+  }
+
+  function deleteOne(id) {
+    const index = state.messages.findIndex(m => m.id === id);
+    if (index !== -1) {
+      state.messages.splice(index, 1);
+      persist();
+      renderList();
+    }
+  }
+
   function markAllRead() {
     state.messages.forEach(item => { item.read = true; });
     persist();
     renderList();
   }
 
+  function deleteAllRead() {
+    state.messages = state.messages.filter(item => !item.read);
+    persist();
+    renderList();
+  }
+
+  function makeButton(label, className, callback) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `secondary ${className}`;
+    button.textContent = label;
+    button.addEventListener('click', callback);
+    return button;
+  }
+
   function renderList() {
     list.replaceChildren();
     const unread = state.messages.filter(item => !item.read).length;
+    const read = state.messages.length - unread;
     badge.hidden = unread === 0;
     badge.textContent = unread > 9 ? '9+' : String(unread);
     toggle.setAttribute('aria-label', unread
@@ -75,15 +120,25 @@ export function createNotifications() {
     if (!state.messages.length) {
       const empty = document.createElement('li');
       empty.className = 'notification-empty';
-      empty.textContent = 'Noch keine Warnungen vorhanden.';
+      empty.textContent = 'Keine Benachrichtigungen vorhanden.';
       list.append(empty);
     } else {
       state.messages.forEach(item => {
         const li = document.createElement('li');
         li.className = 'notification-item' + (item.read ? '' : ' unread') +
           (item.kind === 'empty' ? ' is-urgent' : '');
+        const head = document.createElement('div');
+        head.className = 'notification-item-head';
         const title = document.createElement('strong');
         title.textContent = item.title;
+        head.append(title);
+        if (!item.read) {
+          const dot = document.createElement('span');
+          dot.className = 'notification-unread-dot';
+          dot.setAttribute('aria-label', 'Ungelesen');
+          dot.title = 'Ungelesen';
+          head.append(dot);
+        }
         const content = document.createElement('p');
         content.textContent = item.message;
         const when = document.createElement('time');
@@ -91,11 +146,22 @@ export function createNotifications() {
         when.textContent = new Date(item.createdAt).toLocaleString('de-DE', {
           day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
         });
-        li.append(title, content, when);
+        const actions = document.createElement('div');
+        actions.className = 'notification-item-actions';
+        if (!item.read) {
+          const readButton = makeButton('Als gelesen', 'notification-mark-one', () => markOneRead(item.id));
+          readButton.setAttribute('aria-label', `${item.title}: als gelesen markieren`);
+          actions.append(readButton);
+        }
+        const deleteButton = makeButton('Löschen', 'notification-delete', () => deleteOne(item.id));
+        deleteButton.setAttribute('aria-label', `${item.title}: Benachrichtigung löschen`);
+        actions.append(deleteButton);
+        li.append(head, content, when, actions);
         list.append(li);
       });
     }
     markRead.disabled = unread === 0;
+    deleteRead.disabled = read === 0;
   }
 
   function showToast(title, message, kind) {
@@ -113,7 +179,7 @@ export function createNotifications() {
 
   function notify(kind, title, message) {
     state.messages.unshift({
-      kind, title, message, createdAt: Date.now(), read: !panel.hidden
+      id: newId(), kind, title, message, createdAt: Date.now(), read: false
     });
     state.messages.splice(MAX_MESSAGES);
     persist();
@@ -123,7 +189,6 @@ export function createNotifications() {
 
   function updateBanner() {
     if (lastPercent === null || !connected) {
-      // Keine aktuellen Messwerte: niemals einen veralteten Wert als live ausgeben.
       banner.hidden = true;
       return;
     }
@@ -158,7 +223,7 @@ export function createNotifications() {
       : percent < WATER_WARNING_THRESHOLD_PERCENT ? 'critical'
       : percent >= WATER_RESET_THRESHOLD_PERCENT ? 'reset' : 'intermediate';
 
-    // Sensorrauschen nicht als Ereignis melden: zwei gleiche Grenzwertbereiche in Folge.
+    // Sensorrauschen: zwei aufeinanderfolgende Messwerte derselben Zone.
     if (type === candidate) consecutive += 1;
     else { candidate = type; consecutive = 1; }
 
@@ -171,7 +236,7 @@ export function createNotifications() {
         }
       } else if (type === 'empty' && !state.notifiedEmpty) {
         state.notifiedEmpty = true;
-        state.notifiedCritical = true; // Direkt leer: keine zweite, redundante kritische Warnung.
+        state.notifiedCritical = true;
         persist();
         notify('empty', 'Wassertank leer',
           `Der Füllstand beträgt nur noch ${Math.round(percent)} %. Bitte Wasser nachfüllen.`);
@@ -198,9 +263,7 @@ export function createNotifications() {
   toggle?.addEventListener('click', () => setOpen(panel.hidden));
   close?.addEventListener('click', () => setOpen(false));
   markRead?.addEventListener('click', markAllRead);
-  test?.addEventListener('click', () => notify(
-    'test', 'Testwarnung (Demo)', 'Dies ist nur ein Test. Der gemessene Wasserstand wird nicht verändert.'
-  ));
+  deleteRead?.addEventListener('click', deleteAllRead);
   document.addEventListener('pointerdown', event => {
     if (!panel.hidden && !menu.contains(event.target)) setOpen(false);
   });
@@ -210,6 +273,7 @@ export function createNotifications() {
       toggle.focus();
     }
   });
+  persist(); // Migration: IDs ergänzen, alte Demo-Testmeldungen entfernen.
   renderList();
   return { onWaterLevel, onConnectionChange };
 }

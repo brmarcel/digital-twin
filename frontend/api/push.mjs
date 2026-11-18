@@ -1,9 +1,11 @@
 /**
- * Vercel Function: Browser-Push abonnieren, testen, abbestellen.
+ * Vercel Function: Browser-Push ohne Einrichtungscode abonnieren, testen, abbestellen.
  * Kein Zugriff auf MQTT oder Pumpenbefehle.
  * Alle privaten Schlüssel liegen ausschließlich in Vercel-Umgebungsvariablen.
+ * Die Registrierung ist bewusst öffentlich. Ein Geräte-Token schützt Test und Abmeldung.
+ * Max. 50 Abos als einfache Kapazitätsbegrenzung (kein vollständiger Spam-Schutz).
  */
-import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
+import { randomBytes, createHash } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import webpush from 'web-push';
 
@@ -14,17 +16,12 @@ function json(res, code, payload) {
   res.setHeader('Cache-Control', 'no-store');
   return res.status(code).json(payload);
 }
-function equal(a, b) {
-  if (typeof a !== 'string' || typeof b !== 'string' || !a || !b) return false;
-  const x = Buffer.from(a), y = Buffer.from(b);
-  return x.length === y.length && timingSafeEqual(x, y);
-}
 function hash(token) { return createHash('sha256').update(token).digest('hex'); }
 function configured() {
   return Boolean(process.env.SUPABASE_URL &&
     (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY) &&
     process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY &&
-    process.env.VAPID_SUBJECT && process.env.PUSH_PAIRING_TOKEN);
+    process.env.VAPID_SUBJECT);
 }
 function db() {
   return createClient(process.env.SUPABASE_URL,
@@ -78,9 +75,6 @@ export default async function handler(req, res) {
   const client = db();
   try {
     if (body.action === 'subscribe') {
-      if (!equal(req.headers['x-push-pairing'], process.env.PUSH_PAIRING_TOKEN)) {
-        return json(res, 403, { error: 'Einrichtungscode nicht korrekt.' });
-      }
       if (!validSubscription(body.subscription)) {
         return json(res, 400, { error: 'Ungültiges Push-Abonnement.' });
       }
