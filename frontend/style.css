@@ -545,3 +545,15 @@ button.danger { color: var(--button-danger-text); background: var(--button-dange
 @media (max-width: 390px) {
   .notification-panel { top: 98px; }
 }
+
+/* Web Push – Bedienung innerhalb des bestehenden Benachrichtigungsmenüs. */
+.push-settings { margin-top: 14px; padding-top: 13px; border-top: 1px solid var(--border); }
+.push-settings h3 { font-size: 13px; margin: 0 0 6px; color: var(--text); }
+.push-settings p, .push-settings small { display: block; font-size: 11px; line-height: 1.55; color: var(--muted); }
+.push-settings p { margin: 0 0 10px; }
+.push-pairing-row { display: grid; gap: 6px; margin-bottom: 9px; }
+.push-pairing-row label { font-size: 11px; color: var(--muted); }
+.push-pairing-row input { width: 100%; min-width: 0; box-sizing: border-box; font-size: 12px; }
+.push-settings-buttons { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-bottom: 8px; }
+.push-settings-buttons button { font-size: 11px; padding: 8px 10px; }
+.push-settings small { font-size: 10px; }

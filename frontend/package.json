@@ -1,0 +1,11 @@
+{
+  "name": "plant-twin-push-backend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Vercel Functions for the Plant Twin web push notifications",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.0",
+    "web-push": "^3.6.7"
+  }
+}

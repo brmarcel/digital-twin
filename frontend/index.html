@@ -70,12 +70,27 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
               </button>
             </div>
-            <p class="notification-explainer">Warnungen werden bei geöffneter App aus MQTT-Messwerten erzeugt.</p>
+            <p class="notification-explainer">Die Liste zeigt Warnungen aus MQTT bei geöffneter App. System-Push funktioniert zusätzlich bei geschlossener App.</p>
             <ul id="notification-list" class="notification-list" aria-label="Letzte Benachrichtigungen"></ul>
             <div class="notification-panel-actions">
               <button id="notification-test" class="secondary" type="button">Testwarnung</button>
               <button id="notification-mark-read" class="secondary" type="button">Alle gelesen</button>
             </div>
+            <section class="push-settings" aria-labelledby="push-title">
+              <h3 id="push-title">Push auf diesem Gerät</h3>
+              <p id="push-status" role="status" aria-live="polite">Push-Status wird geprüft …</p>
+              <div id="push-pairing-row" class="push-pairing-row">
+                <label for="push-pairing-code">Einrichtungscode (aus Vercel)</label>
+                <input id="push-pairing-code" type="password" autocomplete="off"
+                       placeholder="Einrichtungscode eingeben" spellcheck="false">
+              </div>
+              <div class="push-settings-buttons">
+                <button id="push-enable" type="button">Push aktivieren</button>
+                <button id="push-test" type="button" class="secondary" hidden>Push testen</button>
+                <button id="push-disable" type="button" class="secondary" hidden>Deaktivieren</button>
+              </div>
+              <small>Push wird separat pro Smartphone/Computer aktiviert. Die Testwarnung oben bleibt lokal.</small>
+            </section>
           </section>
         </div>
         <!-- Ein kompakter Umschalter für das gesamte Dashboard einschließlich 3D-Hintergrund. -->
