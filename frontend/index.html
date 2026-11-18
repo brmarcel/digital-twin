@@ -9,6 +9,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#111820">
+  <!-- PWA: Installation auf Desktop, Android und iOS. -->
+  <meta name="application-name" content="Digitaler Blumentopf">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Plant Twin">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png">
   <title>Digitaler Blumentopf – Digital Twin</title>
   <!-- Gespeicherten Modus vor dem CSS-Laden anwenden: kein kurzes Aufblitzen. -->
   <script>
@@ -31,6 +39,8 @@
   }
   </script>
   <script type="module" src="./js/main.js"></script>
+  <!-- Getrennte PWA-Registrierung; bestehende App-Logik bleibt unverändert. -->
+  <script type="module" src="./js/pwa.js"></script>
 </head>
 <body>
   <div class="app-shell">
