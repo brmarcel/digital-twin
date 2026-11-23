@@ -1,8 +1,7 @@
 <!DOCTYPE html>
 <!--
   index.html
-  Dreispaltiges Dashboard: links Monitoring, Mitte 3D-Modell, rechts Steuerung.
-  Die bestehende MQTT-/Pumpenlogik bleibt in den JavaScript-Modulen.
+  Dreispaltiges Dashboard: links Monitoring, Mitte 3D-Modell, rechts Steuerung + Vollbild-Langzeitverlauf.
 -->
 <html lang="de">
 <head>
@@ -28,7 +27,7 @@
     }
   </script>
   <link rel="stylesheet" href="./style.css">
- <script type="importmap">
+  <script type="importmap">
   {
     "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -39,7 +38,6 @@
   }
   </script>
   <script type="module" src="./js/main.js"></script>
-  <!-- Getrennte PWA-Registrierung; bestehende App-Logik bleibt unverändert. -->
   <script type="module" src="./js/pwa.js"></script>
 </head>
 <body>
@@ -89,14 +87,15 @@
             </section>
           </section>
         </div>
-        <!-- Ein kompakter Umschalter für das gesamte Dashboard einschließlich 3D-Hintergrund. -->
+
+        <!-- Theme-Umschalter -->
         <button id="theme-toggle" class="header-icon-button" type="button"
                 aria-label="Light Mode aktivieren" title="Light Mode aktivieren">
           <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14A8.5 8.5 0 0 1 10 3.5 8.5 8.5 0 1 0 20.5 14Z"/></svg>
           <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>
         </button>
 
-        <!-- MQTT-Einstellungen bleiben unsichtbar, bis der Status geöffnet wird. -->
+        <!-- MQTT-Verbindung -->
         <div id="connection-menu" class="connection-menu">
           <button id="connection-toggle" class="connection-chip" type="button"
                   aria-controls="connection-panel" aria-expanded="false" aria-haspopup="true">
@@ -137,7 +136,7 @@
       </div>
     </header>
 
-    <!-- Sichtbare Wasserstandswarnung (bei neuen, gültigen MQTT-Messwerten). -->
+    <!-- Sichtbare Wasserstandswarnung -->
     <div id="water-alert-banner" class="water-alert-banner" role="status" aria-live="polite" hidden>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 10 18H2L12 3ZM12 9v5m0 3h.01"/></svg>
       <span id="water-alert-message"></span>
@@ -145,17 +144,22 @@
     <div id="notification-toast" class="notification-toast" role="status" aria-live="polite" hidden></div>
 
     <main class="workspace">
-      <!-- Links: ausschließlich Messwerte und Geräte-Istzustände. -->
+      <!-- Links: Messwerte (klickbar für Vollbild-Verlauf) und Geräte-Istzustände -->
       <aside class="sidebar monitoring-sidebar" aria-labelledby="monitoring-title">
         <div class="sidebar-heading">
           <div><div class="eyebrow">ÜBERSICHT</div><h2 id="monitoring-title">Monitoring</h2></div>
-          <span class="panel-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18M7 14l4-4 4 3 5-7"/></svg></span>
+          <button type="button" class="panel-icon" data-open-history="all" title="Langzeitverlauf öffnen" aria-label="Langzeitverlauf öffnen">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18M7 14l4-4 4 3 5-7"/></svg>
+          </button>
         </div>
 
-        <section class="metric-card moisture-card" aria-labelledby="moisture-title">
-          <div class="metric-heading">
-            <span class="metric-icon moisture-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3C9 7.3 6 10.4 6 14a6 6 0 0 0 12 0c0-3.6-3-6.7-6-11Z"/></svg></span>
-            <h3 id="moisture-title">Bodenfeuchtigkeit</h3>
+        <section class="metric-card moisture-card metric-card-clickable" data-open-history="moisture" role="button" tabindex="0" aria-labelledby="moisture-title">
+          <div class="metric-card-top">
+            <div class="metric-heading">
+              <span class="metric-icon moisture-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3C9 7.3 6 10.4 6 14a6 6 0 0 0 12 0c0-3.6-3-6.7-6-11Z"/></svg></span>
+              <h3 id="moisture-title">Bodenfeuchtigkeit</h3>
+            </div>
+            <span class="metric-link-hint">Verlauf →</span>
           </div>
           <div class="metric-number" id="moisture" aria-live="polite">– <span>%</span></div>
           <div class="progress-track moisture-track" id="moisture-progress" role="progressbar" aria-label="Bodenfeuchtigkeit" aria-valuemin="0" aria-valuemax="100" aria-valuetext="Keine Messdaten">
@@ -163,11 +167,14 @@
           </div>
           <div id="moisture-state" class="metric-detail">Warte auf Messwerte</div>
         </section>
-             
-        <section class="metric-card water-card" aria-labelledby="water-title">
-          <div class="metric-heading">
-            <span class="metric-icon water-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8c2 0 2 2 4 2s2-2 4-2 2 2 4 2 2-2 4-2M4 14c2 0 2 2 4 2s2-2 4-2 2 2 4 2 2-2 4-2"/></svg></span>
-            <h3 id="water-title">Wasservorrat</h3>
+
+        <section class="metric-card water-card metric-card-clickable" data-open-history="water" role="button" tabindex="0" aria-labelledby="water-title">
+          <div class="metric-card-top">
+            <div class="metric-heading">
+              <span class="metric-icon water-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8c2 0 2 2 4 2s2-2 4-2 2 2 4 2 2-2 4-2M4 14c2 0 2 2 4 2s2-2 4-2 2 2 4 2 2-2 4-2"/></svg></span>
+              <h3 id="water-title">Wasservorrat</h3>
+            </div>
+            <span class="metric-link-hint">Verlauf →</span>
           </div>
           <div class="metric-number" id="water-level" aria-live="polite">– <span>%</span></div>
           <div class="progress-track water-track" id="water-progress" role="progressbar" aria-label="Füllstand Wasservorrat" aria-valuemin="0" aria-valuemax="100" aria-valuetext="Keine Messdaten">
@@ -176,31 +183,7 @@
           <div class="water-volume" id="water-volume">– / 1.800 ml</div>
           <div id="water-state" class="metric-detail" role="status">Warte auf Messwerte</div>
         </section>
-        
-        <!-- Karte 1: Bodenfeuchtigkeit (klickbar -> Vollbildverlauf) -->
-        <section class="metric-card metric-card-clickable" data-open-history="moisture" role="button" tabindex="0" aria-label="Bodenfeuchtigkeit – Langzeitverlauf öffnen">
-          <div class="metric-card-top">
-            <div class="metric-label">
-              <span class="metric-icon green">💧</span>
-              <span>Bodenfeuchtigkeit</span>
-            </div>
-            <span class="metric-link-hint">Verlauf →</span>
-          </div>
-          <!-- DEIN BESTEHENDER WERT- UND BALKEN-CODE BLEIBT HIER UNVERÄNDERT -->
-        </section>
 
-        <!-- Karte 2: Wasservorrat (klickbar -> Vollbildverlauf) -->
-        <section class="metric-card metric-card-clickable" data-open-history="water" role="button" tabindex="0" aria-label="Wasservorrat – Langzeitverlauf öffnen">
-          <div class="metric-card-top">
-            <div class="metric-label">
-              <span class="metric-icon blue">〰️</span>
-              <span>Wasservorrat</span>
-            </div>
-            <span class="metric-link-hint">Verlauf →</span>
-          </div>
-          <!-- DEIN BESTEHENDER WERT-, BALKEN- UND ML-CODE BLEIBT HIER UNVERÄNDERT -->
-        </section>
-        
         <section class="status-card" aria-labelledby="status-title">
           <div class="section-kicker">GERÄTESTATUS</div>
           <h3 id="status-title">System</h3>
@@ -211,7 +194,7 @@
         <p class="sidebar-footnote">Angezeigt werden ausschließlich empfangene Messwerte und bestätigte Gerätezustände.</p>
       </aside>
 
-      <!-- Mitte: unverändertes interaktives Three.js-Modell, jetzt in eigenem Container. -->
+      <!-- Mitte: Interaktives Three.js-Modell -->
       <section class="viewer" aria-label="Interaktive 3D-Ansicht des Blumentopfs">
         <div id="scene-stage" class="scene-stage"></div>
         <div class="viewer-top" aria-hidden="true"><span class="viewer-chip"><span class="viewer-chip-dot"></span>3D-ANSICHT</span></div>
@@ -221,7 +204,7 @@
         </div>
       </section>
 
-      <!-- Rechts: ausschließlich Pumpensteuerung und Automatik-Konfiguration. -->
+      <!-- Rechts: Pumpensteuerung und Automatik-Konfiguration -->
       <aside class="sidebar controls-sidebar" aria-labelledby="control-title">
         <div class="sidebar-heading">
           <div><div class="eyebrow">KONFIGURATION</div><h2 id="control-title">Steuerung</h2></div>
@@ -268,10 +251,114 @@
           <p id="pump-hint" class="pump-hint" aria-live="polite">Zuerst MQTT verbinden.</p>
           <div id="pump-message" class="pump-message" role="status" aria-live="polite">Noch keine Pumpenbefehle gesendet.</div>
         </div>
-
-
       </aside>
     </main>
+  </div>
+
+  <!-- Vollbild-Ansicht: Langzeitverlauf & Analyse -->
+  <div id="history-fullscreen" class="history-fullscreen" hidden aria-modal="true" role="dialog" aria-labelledby="fs-history-title">
+    <div class="fs-container">
+      <header class="fs-header">
+        <div class="fs-title-group">
+          <button type="button" id="fs-close-btn" class="fs-back-btn">← Zurück zum Dashboard</button>
+          <div>
+            <span class="fs-eyebrow">LANGZEITANALYSE · 6 MONATE SPEICHER</span>
+            <h2 id="fs-history-title">Sensordaten & Bewässerungsverlauf</h2>
+          </div>
+        </div>
+
+        <div class="fs-controls">
+          <div class="fs-metric-tabs" role="group" aria-label="Messgröße wählen">
+            <button type="button" class="fs-metric-btn active" data-metric="all">Beide Werte</button>
+            <button type="button" class="fs-metric-btn" data-metric="moisture">Bodenfeuchte (%)</button>
+            <button type="button" class="fs-metric-btn" data-metric="water">Wasservorrat (ml / %)</button>
+          </div>
+
+          <div class="range-tabs fs-range-tabs" role="group" aria-label="Zeitraum wählen">
+            <button type="button" class="range-btn active" data-hours="24">24 Std.</button>
+            <button type="button" class="range-btn" data-hours="168">7 Tage</button>
+            <button type="button" class="range-btn" data-hours="720">30 Tage</button>
+            <button type="button" class="range-btn" data-hours="4320">6 Mon.</button>
+          </div>
+        </div>
+      </header>
+
+      <div class="fs-body">
+        <!-- Linker Hauptbereich: Großes Diagramm mit Achsen -->
+        <div class="fs-chart-card">
+          <div class="fs-chart-topbar">
+            <div class="history-legend" aria-hidden="true">
+              <span id="legend-item-moisture"><i class="legend-dot moisture"></i> Bodenfeuchte (%)</span>
+              <span id="legend-item-water"><i class="legend-dot water"></i> Wasserstand (% / ml)</span>
+              <span><i class="legend-line pump"></i> Bewässerungsvorgang</span>
+            </div>
+            <div id="history-status" class="fs-status-badge">Lade Daten …</div>
+          </div>
+
+          <div class="history-chart-wrap fs-chart-wrap" id="history-chart-wrap">
+            <svg id="history-chart" viewBox="0 0 920 430" preserveAspectRatio="none" aria-label="Großes Verlaufsdiagramm">
+              <!-- Horizontale Gitterlinien -->
+              <line x1="72" y1="30" x2="848" y2="30" class="chart-grid" />
+              <line x1="72" y1="115" x2="848" y2="115" class="chart-grid" />
+              <line x1="72" y1="200" x2="848" y2="200" class="chart-grid" />
+              <line x1="72" y1="285" x2="848" y2="285" class="chart-grid" />
+              <line x1="72" y1="370" x2="848" y2="370" class="chart-axis-line" />
+              <line x1="72" y1="30" x2="72" y2="370" class="chart-axis-line" />
+              <line x1="848" y1="30" x2="848" y2="370" class="chart-axis-line" />
+
+              <!-- Y-Achse links: Prozent -->
+              <text x="62" y="34" class="chart-axis-text" text-anchor="end">100 %</text>
+              <text x="62" y="119" class="chart-axis-text" text-anchor="end">75 %</text>
+              <text x="62" y="204" class="chart-axis-text" text-anchor="end">50 %</text>
+              <text x="62" y="289" class="chart-axis-text" text-anchor="end">25 %</text>
+              <text x="62" y="374" class="chart-axis-text" text-anchor="end">0 %</text>
+              <text x="18" y="200" class="chart-axis-title" text-anchor="middle" transform="rotate(-90 18 200)">Füllstand / Feuchte (%)</text>
+
+              <!-- Y-Achse rechts: Milliliter (1.800 ml Kapazität) -->
+              <text x="858" y="34" class="chart-axis-text" text-anchor="start">1.800 ml</text>
+              <text x="858" y="119" class="chart-axis-text" text-anchor="start">1.350 ml</text>
+              <text x="858" y="204" class="chart-axis-text" text-anchor="start">900 ml</text>
+              <text x="858" y="289" class="chart-axis-text" text-anchor="start">450 ml</text>
+              <text x="858" y="374" class="chart-axis-text" text-anchor="start">0 ml</text>
+              <text x="906" y="200" class="chart-axis-title" text-anchor="middle" transform="rotate(90 906 200)">Wassermenge (ml)</text>
+
+              <!-- X-Achse: 5 Zeitstempel -->
+              <text id="chart-x-0" x="72" y="394" class="chart-axis-text" text-anchor="start">–</text>
+              <text id="chart-x-1" x="266" y="394" class="chart-axis-text" text-anchor="middle">–</text>
+              <text id="chart-x-2" x="460" y="394" class="chart-axis-text" text-anchor="middle">–</text>
+              <text id="chart-x-3" x="654" y="394" class="chart-axis-text" text-anchor="middle">–</text>
+              <text id="chart-x-4" x="848" y="394" class="chart-axis-text" text-anchor="end">Jetzt</text>
+              <text x="460" y="418" class="chart-axis-title" text-anchor="middle">Zeitverlauf</text>
+
+              <!-- Bewässerungs-Markierungen -->
+              <g id="history-events-layer"></g>
+
+              <!-- Datenlinien -->
+              <polyline id="history-line-water" fill="none" stroke="var(--blue)" stroke-width="2.6" stroke-linejoin="round" points="" />
+              <polyline id="history-line-moisture" fill="none" stroke="var(--green)" stroke-width="3" stroke-linejoin="round" points="" />
+
+              <!-- Interaktiver Hover-Cursor -->
+              <line id="chart-hover-line" x1="0" y1="30" x2="0" y2="370" class="chart-hover-line" hidden />
+              <circle id="chart-hover-moisture" cx="0" cy="0" r="5" fill="var(--green)" hidden />
+              <circle id="chart-hover-water" cx="0" cy="0" r="5" fill="var(--blue)" hidden />
+            </svg>
+            <div id="history-tooltip" class="history-tooltip fs-tooltip" hidden></div>
+          </div>
+        </div>
+
+        <!-- Rechte Seitenkarte: Bewässerungshistorie & Kennzahlen -->
+        <aside class="fs-events-card">
+          <div class="watering-history-header">
+            <h3>Bewässerungsvorgänge</h3>
+            <strong id="watering-count">0×</strong>
+          </div>
+          <p class="fs-events-sub">Alle manuellen und automatischen Pumpvorgänge im gewählten Zeitraum.</p>
+          <ul id="watering-list" class="watering-list fs-watering-list">
+            <li class="watering-empty">Keine Bewässerungen im Zeitraum</li>
+          </ul>
+        </aside>
+      </div>
+    </div>
   </div>
 </body>
 </html>
