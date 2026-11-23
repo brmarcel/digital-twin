@@ -102,6 +102,7 @@ document.querySelectorAll('.fs-metric-btn').forEach(btn => {
   });
 });
 
+/** Zeichnet Bodenfeuchte, Wasserfüllstand und Bewässerungsereignisse im großen SVG. */
 function renderHistory() {
   const moistureLine = document.getElementById('history-line-moisture');
   const waterLine = document.getElementById('history-line-water');
@@ -140,12 +141,12 @@ function renderHistory() {
     ...(showWater ? historyData.waterLevel.map(d => new Date(d.created_at).getTime()) : [])
   ];
 
-  if (allTimestamps.length < 2) {
-    moistureLine.setAttribute('points', '');
-    waterLine.setAttribute('points', '');
+  if (allTimestamps.length < 1) {
+    moistureLine.setAttribute('d', '');
+    waterLine.setAttribute('d', '');
     if (eventsLayer) eventsLayer.innerHTML = '';
     status.textContent = history.isConfigured
-      ? 'Noch zu wenige Datenpunkte im Zeitraum'
+      ? 'Noch keine Datenpunkte im Zeitraum'
       : 'Supabase in js/history.js konfigurieren';
     return;
   }
@@ -159,13 +160,8 @@ function renderHistory() {
   const toX = iso => PLOT.left + ((new Date(iso).getTime() - minTime) / timeSpan) * plotWidth;
   const toY = pct => PLOT.bottom - (Math.max(0, Math.min(100, pct)) / 100) * plotHeight;
 
-  const MAX_GAP_MS = 45 * 60 * 1000; // Lücke > 45 Min. (Browser war geschlossen) nicht schräg verbinden
+  const MAX_GAP_MS = 45 * 60 * 1000; // Offline-Pausen > 45 Min. unterbrechen
 
-  /**
-   * Erzeugt SVG-Pfaddaten (`d`-Attribut):
-   * - Unterbricht die Linie bei längeren Offline-Pausen (> 45 Min.)
-   * - Zeichnet den Wasserstand als realistische Stufenkurve (step-after)
-   */
   const buildPath = (series, stepped = false) => {
     if (!series.length) return '';
     let d = '';
@@ -176,16 +172,15 @@ function renderHistory() {
       const y = toY(curr.value).toFixed(1);
 
       if (i === 0) {
-        d += `M ${x} ${y}`;
+        d += `M ${x} ${y} l 0.1 0`;
         continue;
       }
 
       const prev = series[i - 1];
       const prevMs = new Date(prev.created_at).getTime();
 
-      // Bei längerer Aufzeichnungspause neu ansetzen statt schräger Rampe
       if (currMs - prevMs > MAX_GAP_MS && selectedHours <= 168) {
-        d += ` M ${x} ${y}`;
+        d += ` M ${x} ${y} l 0.1 0`;
       } else if (stepped) {
         const prevY = toY(prev.value).toFixed(1);
         d += ` L ${x} ${prevY} L ${x} ${y}`;
@@ -198,9 +193,6 @@ function renderHistory() {
 
   moistureLine.setAttribute('d', showMoisture ? buildPath(historyData.moisture, false) : '');
   waterLine.setAttribute('d', showWater ? buildPath(historyData.waterLevel, true) : '');
-
-  moistureLine.setAttribute('points', showMoisture ? buildPoints(historyData.moisture) : '');
-  waterLine.setAttribute('points', showWater ? buildPoints(historyData.waterLevel) : '');
 
   if (eventsLayer) {
     eventsLayer.innerHTML = events
