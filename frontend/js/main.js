@@ -18,7 +18,7 @@ let lastMoisture = null;
 
 const history = createHistoryStore();
 let selectedHours = 24;
-let selectedMetric = 'all'; // 'all' | 'moisture' | 'water'
+let selectedMetric = 'all';
 let historyData = { moisture: [], waterLevel: [], wateringEvents: [] };
 let previousPumpRunning = false;
 let activeWateringStartMs = null;
@@ -61,7 +61,6 @@ function findNearestPoint(series, targetMs) {
   return best;
 }
 
-/** Öffnet die Vollbild-Ansicht und wählt optional den geklickten Sensor vor. */
 function openHistoryFullscreen(metric = 'all') {
   const modal = document.getElementById('history-fullscreen');
   if (!modal) return;
@@ -78,7 +77,6 @@ function closeHistoryFullscreen() {
   if (modal) modal.hidden = true;
 }
 
-// Klick & Tastatur auf die Sensorkarten links verdrahten
 document.querySelectorAll('[data-open-history]').forEach(card => {
   const metric = card.dataset.openHistory || 'all';
   card.addEventListener('click', () => openHistoryFullscreen(metric));
@@ -95,7 +93,6 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeHistoryFullscreen();
 });
 
-// Messgrößen-Tabs in der Vollbildansicht
 document.querySelectorAll('.fs-metric-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     selectedMetric = btn.dataset.metric;
@@ -105,7 +102,6 @@ document.querySelectorAll('.fs-metric-btn').forEach(btn => {
   });
 });
 
-/** Zeichnet Bodenfeuchte, Wasserfüllstand und Bewässerungsereignisse im großen SVG. */
 function renderHistory() {
   const moistureLine = document.getElementById('history-line-moisture');
   const waterLine = document.getElementById('history-line-water');
@@ -182,7 +178,6 @@ function renderHistory() {
       .join('');
   }
 
-  // 5 gleichmäßige X-Achsen-Zeitstempel setzen
   for (let i = 0; i < 5; i++) {
     const label = document.getElementById(`chart-x-${i}`);
     if (label) {
@@ -210,7 +205,6 @@ document.querySelectorAll('.range-btn').forEach(btn => {
   });
 });
 
-// Interaktiver Hover-Tooltip im großen SVG
 const chartWrap = document.getElementById('history-chart-wrap');
 const chartSvg = document.getElementById('history-chart');
 const tooltip = document.getElementById('history-tooltip');
@@ -281,7 +275,6 @@ if (chartWrap && chartSvg && tooltip) {
   });
 }
 
-// Initiale Daten vorladen
 refreshHistory(24);
 
 async function sendPumpRequest(send) {
