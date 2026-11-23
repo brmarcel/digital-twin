@@ -1,6 +1,6 @@
 /**
  * @file main.js
- * Startet 3D-Szene, Feuchtemodell, Dashboard, Langzeit-Historie und MQTT-Steuerung.
+ * Startet 3D-Szene, Feuchtemodell, Dashboard, Vollbild-Langzeithistorie und MQTT-Steuerung.
  */
 import { createScene } from './scene.js';
 import { createPlantPot } from './plantPot.js';
@@ -10,27 +10,31 @@ import { createMqtt } from './mqtt.js';
 import { setupTheme } from './theme.js';
 import { createHistoryStore } from './history.js';
 import { WATER_CAPACITY_ML } from './waterLevel.js';
-import { createNotifications } from './notifications.js';
 
 const { scene, frameModel, setTheme: setSceneTheme } = createScene();
 setupTheme(setSceneTheme);
 let plantPot = null;
 let lastMoisture = null;
 
-const notifications = createNotifications();
 const history = createHistoryStore();
 let selectedHours = 24;
+let selectedMetric = 'all'; // 'all' | 'moisture' | 'water'
 let historyData = { moisture: [], waterLevel: [], wateringEvents: [] };
 let previousPumpRunning = false;
-let lastRequestedDurationMs = null;
+let activeWateringStartMs = null;
+let activeWateringEventId = null;
 
-/** Formatiert Zeitstempel passend zum gewählten Zeitraum. */
+const PLOT = { left: 72, right: 848, top: 30, bottom: 370 };
+
 function formatAxisTime(isoString, hours) {
   const date = new Date(isoString);
   if (hours <= 24) {
     return date.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
   }
-  return date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+  if (hours <= 168) {
+    return date.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
+  }
+  return date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' });
 }
 
 function formatFullDateTime(isoString) {
@@ -43,7 +47,6 @@ function formatFullDateTime(isoString) {
   });
 }
 
-/** Findet den zeitlich nächstgelegenen Messpunkt zu einem Zeitstempel. */
 function findNearestPoint(series, targetMs) {
   if (!series.length) return null;
   let best = series[0];
@@ -58,27 +61,74 @@ function findNearestPoint(series, targetMs) {
   return best;
 }
 
-/** Zeichnet Bodenfeuchte, Wasserfüllstand und Bewässerungsereignisse im SVG. */
+/** Öffnet die Vollbild-Ansicht und wählt optional den geklickten Sensor vor. */
+function openHistoryFullscreen(metric = 'all') {
+  const modal = document.getElementById('history-fullscreen');
+  if (!modal) return;
+  selectedMetric = metric;
+  document.querySelectorAll('.fs-metric-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.metric === metric);
+  });
+  modal.hidden = false;
+  refreshHistory(selectedHours);
+}
+
+function closeHistoryFullscreen() {
+  const modal = document.getElementById('history-fullscreen');
+  if (modal) modal.hidden = true;
+}
+
+// Klick & Tastatur auf die Sensorkarten links verdrahten
+document.querySelectorAll('[data-open-history]').forEach(card => {
+  const metric = card.dataset.openHistory || 'all';
+  card.addEventListener('click', () => openHistoryFullscreen(metric));
+  card.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      openHistoryFullscreen(metric);
+    }
+  });
+});
+
+document.getElementById('fs-close-btn')?.addEventListener('click', closeHistoryFullscreen);
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeHistoryFullscreen();
+});
+
+// Messgrößen-Tabs in der Vollbildansicht
+document.querySelectorAll('.fs-metric-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    selectedMetric = btn.dataset.metric;
+    document.querySelectorAll('.fs-metric-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderHistory();
+  });
+});
+
+/** Zeichnet Bodenfeuchte, Wasserfüllstand und Bewässerungsereignisse im großen SVG. */
 function renderHistory() {
   const moistureLine = document.getElementById('history-line-moisture');
   const waterLine = document.getElementById('history-line-water');
   const eventsLayer = document.getElementById('history-events-layer');
   const status = document.getElementById('history-status');
-  const xStartLabel = document.getElementById('chart-x-start');
-  const xEndLabel = document.getElementById('chart-x-end');
   const wateringCount = document.getElementById('watering-count');
   const wateringList = document.getElementById('watering-list');
 
   if (!moistureLine || !waterLine || !status) return;
 
-  // Bewässerungsliste aktualisieren
+  const showMoisture = selectedMetric === 'all' || selectedMetric === 'moisture';
+  const showWater = selectedMetric === 'all' || selectedMetric === 'water';
+
+  moistureLine.style.display = showMoisture ? '' : 'none';
+  waterLine.style.display = showWater ? '' : 'none';
+
   const events = historyData.wateringEvents;
   if (wateringCount) wateringCount.textContent = `${events.length}×`;
   if (wateringList) {
     if (!events.length) {
       wateringList.innerHTML = '<li class="watering-empty">Keine Bewässerungen im Zeitraum</li>';
     } else {
-      wateringList.innerHTML = events.slice(0, 15).map(ev => {
+      wateringList.innerHTML = events.slice(0, 40).map(ev => {
         const modeLabel = ev.mode === 'auto' ? 'Auto' : 'Manuell';
         const durLabel = ev.duration_ms ? ` · ${(ev.duration_ms / 1000).toFixed(0)}s` : '';
         return `<li>
@@ -90,8 +140,8 @@ function renderHistory() {
   }
 
   const allTimestamps = [
-    ...historyData.moisture.map(d => new Date(d.created_at).getTime()),
-    ...historyData.waterLevel.map(d => new Date(d.created_at).getTime())
+    ...(showMoisture ? historyData.moisture.map(d => new Date(d.created_at).getTime()) : []),
+    ...(showWater ? historyData.waterLevel.map(d => new Date(d.created_at).getTime()) : [])
   ];
 
   if (allTimestamps.length < 2) {
@@ -104,27 +154,21 @@ function renderHistory() {
     return;
   }
 
-  const plotLeft = 30;
-  const plotRight = 294;
-  const plotTop = 12;
-  const plotBottom = 100;
-  const plotWidth = plotRight - plotLeft;
-  const plotHeight = plotBottom - plotTop;
-
+  const plotWidth = PLOT.right - PLOT.left;
+  const plotHeight = PLOT.bottom - PLOT.top;
   const minTime = Math.min(...allTimestamps);
   const maxTime = Math.max(...allTimestamps);
   const timeSpan = Math.max(1, maxTime - minTime);
 
-  const toX = iso => plotLeft + ((new Date(iso).getTime() - minTime) / timeSpan) * plotWidth;
-  const toY = pct => plotBottom - (Math.max(0, Math.min(100, pct)) / 100) * plotHeight;
+  const toX = iso => PLOT.left + ((new Date(iso).getTime() - minTime) / timeSpan) * plotWidth;
+  const toY = pct => PLOT.bottom - (Math.max(0, Math.min(100, pct)) / 100) * plotHeight;
 
   const buildPoints = series =>
     series.map(d => `${toX(d.created_at).toFixed(1)},${toY(d.value).toFixed(1)}`).join(' ');
 
-  moistureLine.setAttribute('points', buildPoints(historyData.moisture));
-  waterLine.setAttribute('points', buildPoints(historyData.waterLevel));
+  moistureLine.setAttribute('points', showMoisture ? buildPoints(historyData.moisture) : '');
+  waterLine.setAttribute('points', showWater ? buildPoints(historyData.waterLevel) : '');
 
-  // Bewässerungsereignisse als vertikale Linien einzeichnen
   if (eventsLayer) {
     eventsLayer.innerHTML = events
       .filter(ev => {
@@ -133,18 +177,23 @@ function renderHistory() {
       })
       .map(ev => {
         const x = toX(ev.started_at).toFixed(1);
-        return `<line x1="${x}" y1="${plotTop}" x2="${x}" y2="${plotBottom}" class="chart-event-marker" />`;
+        return `<line x1="${x}" y1="${PLOT.top}" x2="${x}" y2="${PLOT.bottom}" class="chart-event-marker" />`;
       })
       .join('');
   }
 
-  if (xStartLabel) xStartLabel.textContent = formatAxisTime(new Date(minTime).toISOString(), selectedHours);
-  if (xEndLabel) xEndLabel.textContent = formatAxisTime(new Date(maxTime).toISOString(), selectedHours);
+  // 5 gleichmäßige X-Achsen-Zeitstempel setzen
+  for (let i = 0; i < 5; i++) {
+    const label = document.getElementById(`chart-x-${i}`);
+    if (label) {
+      const ts = minTime + (i / 4) * (maxTime - minTime);
+      label.textContent = formatAxisTime(new Date(ts).toISOString(), selectedHours);
+    }
+  }
 
   status.textContent = `${historyData.moisture.length} Feuchte- & ${historyData.waterLevel.length} Wasser-Messpunkte`;
 }
 
-/** Lädt Daten für den gewählten Zeitraum aus Supabase. */
 async function refreshHistory(hours = selectedHours) {
   selectedHours = hours;
   const status = document.getElementById('history-status');
@@ -153,7 +202,6 @@ async function refreshHistory(hours = selectedHours) {
   renderHistory();
 }
 
-// Zeitraum-Buttons verdrahten
 document.querySelectorAll('.range-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
@@ -162,7 +210,7 @@ document.querySelectorAll('.range-btn').forEach(btn => {
   });
 });
 
-// Interaktiver Hover-Tooltip für exakte Werte
+// Interaktiver Hover-Tooltip im großen SVG
 const chartWrap = document.getElementById('history-chart-wrap');
 const chartSvg = document.getElementById('history-chart');
 const tooltip = document.getElementById('history-tooltip');
@@ -172,44 +220,53 @@ const hoverWater = document.getElementById('chart-hover-water');
 
 if (chartWrap && chartSvg && tooltip) {
   chartWrap.addEventListener('pointermove', event => {
+    const showMoisture = selectedMetric === 'all' || selectedMetric === 'moisture';
+    const showWater = selectedMetric === 'all' || selectedMetric === 'water';
+
     const allTimestamps = [
-      ...historyData.moisture.map(d => new Date(d.created_at).getTime()),
-      ...historyData.waterLevel.map(d => new Date(d.created_at).getTime())
+      ...(showMoisture ? historyData.moisture.map(d => new Date(d.created_at).getTime()) : []),
+      ...(showWater ? historyData.waterLevel.map(d => new Date(d.created_at).getTime()) : [])
     ];
     if (allTimestamps.length < 2) return;
 
     const rect = chartSvg.getBoundingClientRect();
-    const svgX = ((event.clientX - rect.left) / rect.width) * 300;
-    const clampedX = Math.max(30, Math.min(294, svgX));
-    const ratio = (clampedX - 30) / (294 - 30);
+    const svgX = ((event.clientX - rect.left) / rect.width) * 920;
+    const clampedX = Math.max(PLOT.left, Math.min(PLOT.right, svgX));
+    const ratio = (clampedX - PLOT.left) / (PLOT.right - PLOT.left);
 
     const minTime = Math.min(...allTimestamps);
     const maxTime = Math.max(...allTimestamps);
     const targetMs = minTime + ratio * (maxTime - minTime);
 
-    const nearM = findNearestPoint(historyData.moisture, targetMs);
-    const nearW = findNearestPoint(historyData.waterLevel, targetMs);
+    const nearM = showMoisture ? findNearestPoint(historyData.moisture, targetMs) : null;
+    const nearW = showWater ? findNearestPoint(historyData.waterLevel, targetMs) : null;
 
     hoverLine.setAttribute('x1', clampedX.toFixed(1));
     hoverLine.setAttribute('x2', clampedX.toFixed(1));
     hoverLine.hidden = false;
 
+    const plotHeight = PLOT.bottom - PLOT.top;
     const lines = [`<strong>${formatFullDateTime(new Date(targetMs).toISOString())}</strong>`];
 
     if (nearM) {
-      const mY = 100 - (Math.max(0, Math.min(100, nearM.value)) / 100) * 88;
+      const mY = PLOT.bottom - (Math.max(0, Math.min(100, nearM.value)) / 100) * plotHeight;
       hoverMoisture.setAttribute('cx', clampedX.toFixed(1));
       hoverMoisture.setAttribute('cy', mY.toFixed(1));
       hoverMoisture.hidden = false;
       lines.push(`Bodenfeuchte: <strong>${Math.round(nearM.value)} %</strong>`);
+    } else {
+      hoverMoisture.hidden = true;
     }
+
     if (nearW) {
-      const wY = 100 - (Math.max(0, Math.min(100, nearW.value)) / 100) * 88;
+      const wY = PLOT.bottom - (Math.max(0, Math.min(100, nearW.value)) / 100) * plotHeight;
       hoverWater.setAttribute('cx', clampedX.toFixed(1));
       hoverWater.setAttribute('cy', wY.toFixed(1));
       hoverWater.hidden = false;
       const ml = Math.round(nearW.volumeMl ?? (nearW.value / 100) * WATER_CAPACITY_ML);
       lines.push(`Wasservorrat: <strong>${Math.round(nearW.value)} % (${ml} ml)</strong>`);
+    } else {
+      hoverWater.hidden = true;
     }
 
     tooltip.innerHTML = lines.join('<br>');
@@ -224,7 +281,7 @@ if (chartWrap && chartSvg && tooltip) {
   });
 }
 
-// Initiale Historie laden
+// Initiale Daten vorladen
 refreshHistory(24);
 
 async function sendPumpRequest(send) {
@@ -240,9 +297,19 @@ async function sendPumpRequest(send) {
 const dashboard = createDashboard({
   onConnect: credentials => connection.connect(credentials),
   onDisconnect: () => connection.disconnect(),
-  onStartPump: durationMs => {
-    lastRequestedDurationMs = durationMs;
-    return sendPumpRequest(() => connection.startPump(durationMs));
+  onStartPump: async durationMs => {
+    await sendPumpRequest(() => connection.startPump(durationMs));
+    const nowIso = new Date().toISOString();
+    activeWateringStartMs = Date.now();
+    activeWateringEventId = await history.saveWateringEvent('manual', durationMs);
+
+    historyData.wateringEvents.unshift({
+      id: activeWateringEventId,
+      started_at: nowIso,
+      mode: 'manual',
+      duration_ms: durationMs
+    });
+    renderHistory();
   },
   onStopPump: () => sendPumpRequest(() => connection.stopPump()),
   onSetPumpMode: mode => sendPumpRequest(() => connection.setPumpMode(mode)),
@@ -264,7 +331,6 @@ const connection = createMqtt({
   },
   onWaterLevel: level => {
     dashboard.showWaterLevel(level);
-    notifications.onWaterLevel(level);
     if (level?.valid) {
       history.saveReading('water_level', level.volumeMl);
       historyData.waterLevel.push({
@@ -276,26 +342,44 @@ const connection = createMqtt({
     }
   },
   onStatus: (message, connected) => dashboard.showStatus(message, connected),
-  onConnectionChange: connected => {
-    dashboard.showConnected(connected);
-    notifications.onConnectionChange(connected);
-  },
+  onConnectionChange: connected => dashboard.showConnected(connected),
   onPumpAvailability: availability => dashboard.showPumpAvailability(availability),
-  onPumpState: pumpState => {
+  onPumpState: async pumpState => {
     dashboard.showPumpState(pumpState);
-    // Wenn die Pumpe neu anläuft (Flanke false -> true), Bewässerungsereignis speichern
-    if (pumpState?.running && !previousPumpRunning) {
-      const nowIso = new Date().toISOString();
-      history.saveWateringEvent(pumpState.mode, lastRequestedDurationMs);
-      historyData.wateringEvents.unshift({
-        started_at: nowIso,
-        mode: pumpState.mode,
-        duration_ms: lastRequestedDurationMs
-      });
-      lastRequestedDurationMs = null;
-      renderHistory();
+    const isRunning = Boolean(pumpState?.running);
+
+    if (isRunning && !previousPumpRunning) {
+      const mode = pumpState.mode === 'manual' ? 'manual' : 'auto';
+      const eventId = await history.saveWateringEvent(mode, null);
+
+      if (eventId !== null) {
+        activeWateringStartMs = Date.now();
+        activeWateringEventId = eventId;
+        historyData.wateringEvents.unshift({
+          id: eventId,
+          started_at: new Date().toISOString(),
+          mode,
+          duration_ms: null
+        });
+        renderHistory();
+      }
     }
-    previousPumpRunning = Boolean(pumpState?.running);
+
+    if (!isRunning && previousPumpRunning && activeWateringStartMs !== null) {
+      const measuredDurationMs = Date.now() - activeWateringStartMs;
+      if (activeWateringEventId) {
+        history.updateWateringDuration(activeWateringEventId, measuredDurationMs);
+        const entry = historyData.wateringEvents.find(ev => ev.id === activeWateringEventId);
+        if (entry && !entry.duration_ms) {
+          entry.duration_ms = measuredDurationMs;
+          renderHistory();
+        }
+      }
+      activeWateringStartMs = null;
+      activeWateringEventId = null;
+    }
+
+    previousPumpRunning = isRunning;
   },
   onPumpConfig: config => dashboard.showPumpConfig(config)
 });
