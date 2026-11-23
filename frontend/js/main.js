@@ -159,8 +159,45 @@ function renderHistory() {
   const toX = iso => PLOT.left + ((new Date(iso).getTime() - minTime) / timeSpan) * plotWidth;
   const toY = pct => PLOT.bottom - (Math.max(0, Math.min(100, pct)) / 100) * plotHeight;
 
-  const buildPoints = series =>
-    series.map(d => `${toX(d.created_at).toFixed(1)},${toY(d.value).toFixed(1)}`).join(' ');
+  const MAX_GAP_MS = 45 * 60 * 1000; // Lücke > 45 Min. (Browser war geschlossen) nicht schräg verbinden
+
+  /**
+   * Erzeugt SVG-Pfaddaten (`d`-Attribut):
+   * - Unterbricht die Linie bei längeren Offline-Pausen (> 45 Min.)
+   * - Zeichnet den Wasserstand als realistische Stufenkurve (step-after)
+   */
+  const buildPath = (series, stepped = false) => {
+    if (!series.length) return '';
+    let d = '';
+    for (let i = 0; i < series.length; i++) {
+      const curr = series[i];
+      const currMs = new Date(curr.created_at).getTime();
+      const x = toX(curr.created_at).toFixed(1);
+      const y = toY(curr.value).toFixed(1);
+
+      if (i === 0) {
+        d += `M ${x} ${y}`;
+        continue;
+      }
+
+      const prev = series[i - 1];
+      const prevMs = new Date(prev.created_at).getTime();
+
+      // Bei längerer Aufzeichnungspause neu ansetzen statt schräger Rampe
+      if (currMs - prevMs > MAX_GAP_MS && selectedHours <= 168) {
+        d += ` M ${x} ${y}`;
+      } else if (stepped) {
+        const prevY = toY(prev.value).toFixed(1);
+        d += ` L ${x} ${prevY} L ${x} ${y}`;
+      } else {
+        d += ` L ${x} ${y}`;
+      }
+    }
+    return d;
+  };
+
+  moistureLine.setAttribute('d', showMoisture ? buildPath(historyData.moisture, false) : '');
+  waterLine.setAttribute('d', showWater ? buildPath(historyData.waterLevel, true) : '');
 
   moistureLine.setAttribute('points', showMoisture ? buildPoints(historyData.moisture) : '');
   waterLine.setAttribute('points', showWater ? buildPoints(historyData.waterLevel) : '');
