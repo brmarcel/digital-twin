@@ -10,6 +10,7 @@ import { createMqtt } from './mqtt.js';
 import { setupTheme } from './theme.js';
 import { createHistoryStore } from './history.js';
 import { WATER_CAPACITY_ML } from './waterLevel.js';
+import { createNotifications } from './notifications.js';
 
 const { scene, frameModel, setTheme: setSceneTheme } = createScene();
 setupTheme(setSceneTheme);
@@ -17,6 +18,7 @@ let plantPot = null;
 let lastMoisture = null;
 
 const history = createHistoryStore();
+const notifications = createNotifications();
 let selectedHours = 24;
 let selectedMetric = 'all';
 let historyData = { moisture: [], waterLevel: [], wateringEvents: [] };
@@ -353,6 +355,7 @@ const connection = createMqtt({
   },
   onWaterLevel: level => {
     dashboard.showWaterLevel(level);
+    notifications.onWaterLevel(level);
     if (level?.valid) {
       history.saveReading('water_level', level.volumeMl);
       historyData.waterLevel.push({
@@ -364,7 +367,10 @@ const connection = createMqtt({
     }
   },
   onStatus: (message, connected) => dashboard.showStatus(message, connected),
-  onConnectionChange: connected => dashboard.showConnected(connected),
+  onConnectionChange: connected => {
+    dashboard.showConnected(connected);
+    notifications.onConnectionChange(connected);
+  },
   onPumpAvailability: availability => dashboard.showPumpAvailability(availability),
   onPumpState: async pumpState => {
     dashboard.showPumpState(pumpState);
